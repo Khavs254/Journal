@@ -654,15 +654,60 @@ function dismissSetupLocal() {
 // ══════════════════════════════════════════════════════
 //  DATA LAYER
 // ══════════════════════════════════════════════════════
+async function bulkInsertEmbedded(trades) {
+  // Insert embedded trades into Supabase in one batch (strips local _id fields)
+  const payload = trades.map(t => {
+    const { _id, ...rest } = t;
+    return rest;
+  });
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}`, {
+    method: 'POST',
+    headers: { ...SB_HEADERS, Prefer: 'return=representation' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Bulk insert failed (${res.status}): ${err.slice(0,200)}`);
+  }
+  return await res.json();
+}
+
 async function loadTrades() {
   if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
     try {
       const ok = await checkAndSetupTable();
       if (!ok) { return [...EMBEDDED_TRADES]; } // table missing, use local until setup
+
       const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?select=*&order=created_at.desc`, { headers: SB_HEADERS });
       if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
       const data = await res.json();
       if (!Array.isArray(data)) { throw new Error('Non-array response: ' + JSON.stringify(data).slice(0,120)); }
+
+      // If Supabase has fewer trades than the embedded snapshot, it means the
+      // embedded trades haven't been synced yet — upload them now.
+      if (data.length < EMBEDDED_TRADES.length) {
+        showToast(`⏫ Syncing ${EMBEDDED_TRADES.length} trades to Supabase…`);
+        try {
+          // Clear whatever is there first so we don't get duplicates
+          if (data.length > 0) {
+            await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?id=neq.00000000-0000-0000-0000-000000000000`, {
+              method: 'DELETE',
+              headers: SB_HEADERS
+            });
+          }
+          const inserted = await bulkInsertEmbedded(EMBEDDED_TRADES);
+          const result = Array.isArray(inserted) ? inserted : EMBEDDED_TRADES;
+          document.getElementById('syncBadge').textContent = `🟢 Supabase (${result.length} trades)`;
+          showToast(`✅ ${result.length} trades synced to Supabase`);
+          return result;
+        } catch(e) {
+          showToast('⚠️ Sync failed, using local data — ' + e.message, true);
+          document.getElementById('syncBadge').textContent = `🟡 Supabase partial (${data.length} in DB + ${EMBEDDED_TRADES.length} local)`;
+          // Merge: Supabase rows + embedded rows that aren't already there
+          return [...data, ...EMBEDDED_TRADES.map((t,i)=>({...t,_id:'emb_'+i}))];
+        }
+      }
+
       document.getElementById('syncBadge').textContent = `🟢 Supabase (${data.length} trades)`;
       return data;
     } catch(e) {
