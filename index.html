@@ -2325,11 +2325,34 @@ async function deleteTrade(id) {
 //  REALTIME SYNC (cross-device/cross-tab live updates)
 // ══════════════════════════════════════════════════════
 let realtimeChannel = null;
+let _sbClient = null; // singleton — never call createClient() more than once
+
+function getSupabaseClient() {
+  if (_sbClient) return _sbClient;
+  if (typeof window.supabase === 'undefined' || !window.supabase.createClient) return null;
+  _sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return _sbClient;
+}
 
 function updateSyncBadgeCount() {
   const badge = document.getElementById('syncBadge');
   if (badge && badge.textContent.includes('Supabase')) {
     badge.textContent = `🟢 Supabase (${allTrades.length} trades)`;
+  }
+}
+
+function updateSyncBadgeRealtime(connected) {
+  const badge = document.getElementById('syncBadge');
+  if (!badge) return;
+  const n = allTrades.length;
+  if (connected) {
+    badge.textContent = `🟢 Supabase (${n} trades)`;
+    badge.style.color = '';
+    badge.style.borderColor = '';
+  } else {
+    badge.textContent = `🟡 Supabase (${n} trades · polling)`;
+    badge.style.color = 'var(--warn)';
+    badge.style.borderColor = 'var(--warn)';
   }
 }
 
@@ -2365,25 +2388,40 @@ document.addEventListener('visibilitychange', () => {
   // again, so nothing is missed even if a realtime event slipped through.
   if (document.visibilityState === 'visible') {
     refreshTradesFromServer();
+    // Also attempt to reconnect realtime if the channel was dropped while backgrounded
+    if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL' && realtimeChannel) {
+      const state = realtimeChannel.state;
+      if (state === 'closed' || state === 'errored' || state === 'leaving') {
+        console.log('Realtime channel was dropped while backgrounded — reconnecting…');
+        try { realtimeChannel.unsubscribe(); } catch(e) {}
+        realtimeChannel = null;
+        subscribeRealtime();
+      }
+    }
   }
 });
 
 function subscribeRealtime() {
   if (!USE_SUPABASE || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
-  if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
-    console.warn('Supabase JS client failed to load — live sync between devices is disabled, but saving/loading still works.');
+  const client = getSupabaseClient();
+  if (!client) {
+    console.warn('Supabase JS client failed to load — live sync disabled, saving/loading still works.');
+    // Start polling as the only option
+    if (!window._pollFallback) {
+      window._pollFallback = setInterval(refreshTradesFromServer, 15000);
+    }
     return;
   }
   if (realtimeChannel) return; // already subscribed
 
-  const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Remove any old channel on the singleton client before creating a new one
+  try { client.removeAllChannels(); } catch(e) {}
 
   realtimeChannel = client
     .channel('trades-live-sync')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: SUPABASE_TABLE }, (payload) => {
       const row = payload.new;
       if (!row || !row.id) return;
-      // Skip if this device already has it (e.g. it's the one that just added it)
       if (allTrades.some(t => t.id === row.id || t._id === row.id)) return;
       row._id = row.id;
       allTrades.unshift(row);
@@ -2407,9 +2445,27 @@ function subscribeRealtime() {
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log('Realtime sync connected — changes from other devices will appear live.');
+        console.log('✅ Realtime sync connected.');
+        updateSyncBadgeRealtime(true);
+        // Cancel polling fallback — realtime is handling updates
+        if (window._pollFallback) { clearInterval(window._pollFallback); window._pollFallback = null; }
+        // Cancel any pending reconnect timer
+        if (window._realtimeReconnectTimer) { clearTimeout(window._realtimeReconnectTimer); window._realtimeReconnectTimer = null; }
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        console.warn('Realtime sync unavailable (status: ' + status + '). Run the Realtime setup SQL in Supabase if this persists — see the DB setup banner SQL.');
+        console.warn('⚠️ Realtime unavailable (' + status + ') — polling every 15s instead.');
+        updateSyncBadgeRealtime(false);
+        realtimeChannel = null; // allow re-subscribe next attempt
+        // Start polling fallback
+        if (!window._pollFallback) {
+          window._pollFallback = setInterval(refreshTradesFromServer, 15000);
+        }
+        // Schedule ONE reconnect attempt — exponential-style, won't loop endlessly
+        if (!window._realtimeReconnectTimer) {
+          window._realtimeReconnectTimer = setTimeout(() => {
+            window._realtimeReconnectTimer = null;
+            subscribeRealtime(); // realtimeChannel is null so this will proceed
+          }, 30000); // wait 30s before retrying (not 10s — avoids hammering)
+        }
       }
     });
 }
