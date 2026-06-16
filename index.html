@@ -1081,6 +1081,386 @@ input::placeholder{color:var(--text-dim);}
   .history-item{padding:10px 12px;}
   .history-item-icon{width:28px;height:28px;font-size:14px;}
 }
+
+/* ═══════════════════════════════════════════════
+   ANALYTICS TAB — NEW DESIGN
+   ═══════════════════════════════════════════════ */
+.analytics-main{padding:16px;max-width:1400px;margin:0 auto;}
+
+.analytics-kpi-strip{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:10px;
+  margin-bottom:16px;
+}
+.analytics-kpi{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px;
+  position:relative;
+  overflow:hidden;
+}
+.analytics-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.analytics-kpi.green::before{background:var(--win);}
+.analytics-kpi.red::before{background:var(--loss);}
+.analytics-kpi.blue::before{background:var(--l2);}
+.analytics-kpi.purple::before{background:var(--l3);}
+.analytics-kpi .ak-label{font-size:9px;color:var(--text-dim);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;}
+.analytics-kpi .ak-value{font-size:22px;font-weight:800;line-height:1;}
+.analytics-kpi .ak-sub{font-size:9px;color:var(--text-dim);margin-top:3px;font-family:'Space Mono',monospace;}
+
+.analytics-filter-bar{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:14px 16px;
+  margin-bottom:16px;
+}
+.filter-section-title{
+  font-size:9px;
+  color:var(--text-dim);
+  font-family:'Space Mono',monospace;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  margin-bottom:10px;
+}
+.instrument-checkboxes{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.instr-check{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:6px 12px;
+  cursor:pointer;
+  transition:all 0.15s;
+  user-select:none;
+}
+.instr-check:hover{border-color:var(--accent);}
+.instr-check input[type="checkbox"]{
+  appearance:none;
+  -webkit-appearance:none;
+  -moz-appearance:none;
+  width:14px;height:14px;
+  border:1px solid var(--text-dim);
+  border-radius:3px;
+  background:transparent;
+  cursor:pointer;
+  position:relative;
+  margin:0;
+  flex-shrink:0;
+  display:grid;
+  place-content:center;
+}
+.instr-check input[type="checkbox"]:checked{
+  background:var(--accent);
+  border-color:var(--accent);
+}
+.instr-check input[type="checkbox"]::before{
+  content:'';
+  width:8px;
+  height:8px;
+  transform:scale(0);
+  transition:120ms transform ease-in-out;
+  box-shadow:inset 1em 1em #000;
+  transform-origin:center;
+  clip-path:polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+.instr-check input[type="checkbox"]:checked::before{
+  transform:scale(1);
+}
+.instr-check span{
+  font-size:11px;
+  font-family:'Space Mono',monospace;
+  font-weight:700;
+  color:var(--text);
+}
+.instr-check .check-count{
+  font-size:9px;
+  color:var(--text-dim);
+  font-family:'Space Mono',monospace;
+}
+.strat-check{transition:border-color 0.2s,background 0.2s;}
+.strat-check:has(input:checked){background:rgba(0,0,0,0.25);}
+.strat-badge{display:inline-flex;align-items:center;}
+
+.analytics-section{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:14px;
+  margin-bottom:16px;
+  overflow:hidden;
+}
+.analytics-section-header{
+  padding:14px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.analytics-section-header h2{
+  font-size:13px;
+  font-weight:800;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.analytics-section-header .section-sub{
+  font-size:10px;
+  color:var(--text-dim);
+  font-family:'Space Mono',monospace;
+}
+
+.prob-matrix-wrap{overflow-x:auto;padding:0 16px 16px;}
+.prob-matrix{
+  width:100%;
+  border-collapse:collapse;
+  min-width:600px;
+}
+.prob-matrix th{
+  background:var(--surface2);
+  padding:10px 12px;
+  text-align:center;
+  font-size:9px;
+  font-family:'Space Mono',monospace;
+  text-transform:uppercase;
+  letter-spacing:0.8px;
+  color:var(--text-dim);
+  font-weight:400;
+  border-bottom:1px solid var(--border);
+  white-space:nowrap;
+}
+.prob-matrix td{
+  padding:12px;
+  text-align:center;
+  border-bottom:1px solid var(--border);
+  font-family:'Space Mono',monospace;
+}
+.prob-matrix .row-label{
+  text-align:left;
+  font-weight:700;
+  font-size:12px;
+  font-family:'Syne',sans-serif;
+  white-space:nowrap;
+}
+.prob-matrix .row-label .row-sub{
+  display:block;
+  font-size:9px;
+  color:var(--text-dim);
+  font-family:'Space Mono',monospace;
+  font-weight:400;
+  margin-top:2px;
+}
+.prob-cell{
+  font-size:18px;
+  font-weight:800;
+  transition:all 0.2s;
+}
+.prob-cell .cell-detail{
+  font-size:9px;
+  color:var(--text-dim);
+  font-weight:400;
+  margin-top:3px;
+}
+.prob-cell.high{color:var(--win);}
+.prob-cell.mid{color:var(--warn);}
+.prob-cell.low{color:var(--loss);}
+.prob-cell.na{color:var(--text-dim);font-size:14px;}
+.prob-matrix tr:hover td{background:var(--surface2);}
+.prob-matrix .total-row td{
+  background:var(--surface2);
+  border-top:2px solid var(--border);
+  font-weight:800;
+}
+
+.escalation-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:12px;
+  padding:16px;
+}
+.esc-card{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px;
+  text-align:center;
+}
+.esc-card .esc-label{
+  font-size:9px;
+  color:var(--text-dim);
+  font-family:'Space Mono',monospace;
+  text-transform:uppercase;
+  letter-spacing:0.8px;
+  margin-bottom:8px;
+}
+.esc-card .esc-value{
+  font-size:28px;
+  font-weight:800;
+  margin-bottom:4px;
+}
+.esc-card .esc-detail{
+  font-size:10px;
+  color:var(--text-dim);
+  font-family:'Space Mono',monospace;
+}
+.esc-card .esc-bar{
+  height:4px;
+  background:var(--bg);
+  border-radius:2px;
+  margin-top:10px;
+  overflow:hidden;
+}
+.esc-card .esc-bar-fill{
+  height:100%;
+  border-radius:2px;
+  transition:width 0.5s ease;
+}
+
+.risk-calc-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  padding:16px;
+}
+@media(max-width:768px){.risk-calc-grid{grid-template-columns:1fr;}}
+
+.risk-model-card{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:16px;
+}
+.risk-model-card h3{
+  font-size:11px;
+  font-weight:800;
+  margin-bottom:12px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.risk-tier-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:8px 0;
+  border-bottom:1px solid var(--border);
+}
+.risk-tier-row:last-child{border-bottom:none;}
+.risk-tier-row .rt-label{
+  font-size:11px;
+  font-family:'Space Mono',monospace;
+  font-weight:700;
+}
+.risk-tier-row .rt-label span{
+  font-size:9px;
+  color:var(--text-dim);
+  font-weight:400;
+}
+.risk-tier-row .rt-value{
+  font-size:13px;
+  font-weight:800;
+  font-family:'Space Mono',monospace;
+}
+.risk-tier-row .rt-value.cum{color:var(--accent);}
+
+.calc-inputs{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.calc-group{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.calc-group label{
+  font-size:9px;
+  color:var(--text-dim);
+  font-family:'Space Mono',monospace;
+  text-transform:uppercase;
+  letter-spacing:0.8px;
+}
+.calc-group input, .calc-group select{
+  background:var(--bg);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:8px 10px;
+  border-radius:7px;
+  font-family:'Space Mono',monospace;
+  font-size:12px;
+  width:100%;
+}
+.calc-group input:focus, .calc-group select:focus{
+  outline:none;
+  border-color:var(--accent);
+}
+
+.calc-result-box{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px;
+  margin-top:12px;
+}
+.calc-result-box .cr-label{
+  font-size:9px;
+  color:var(--text-dim);
+  font-family:'Space Mono',monospace;
+  text-transform:uppercase;
+  letter-spacing:0.8px;
+  margin-bottom:6px;
+}
+.calc-result-box .cr-value{
+  font-size:22px;
+  font-weight:800;
+  color:var(--accent);
+}
+.calc-result-box .cr-detail{
+  font-size:10px;
+  color:var(--text-dim);
+  font-family:'Space Mono',monospace;
+  margin-top:4px;
+}
+
+/* ── Martingale Table ── */
+.mart-table{width:100%;border-collapse:collapse;font-family:'Space Mono',monospace;min-width:640px;}
+.mart-table th{background:var(--surface2);padding:9px 14px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-dim);font-weight:400;white-space:nowrap;}
+.mart-table td{padding:10px 14px;border-top:1px solid var(--border);font-size:12px;white-space:nowrap;}
+.mart-table tr:hover td{background:rgba(255,255,255,0.03);}
+.mart-table tr.mart-active td{background:rgba(0,212,170,0.07);}
+.mart-table tr.mart-active .mart-level{outline:2px solid var(--accent);outline-offset:2px;}
+.mart-level{font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;width:34px;height:22px;border-radius:5px;}
+.mart-risk{color:var(--warn);font-weight:700;}
+.mart-loss{color:var(--loss);}
+.mart-cum{color:var(--accent);}
+.mart-rec{color:var(--l3);}
+.mart-pct-ok{color:var(--win);}
+.mart-pct-warn{color:var(--warn);}
+.mart-pct-danger{color:var(--loss);font-weight:700;}
+.mart-pct-na{color:var(--text-dim);}
+.dd-warning{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:7px;font-size:11px;font-family:'Space Mono',monospace;}
+
+@media(max-width:768px){
+  .analytics-kpi-strip{grid-template-columns:repeat(2,1fr);}
+  .risk-calc-grid{grid-template-columns:1fr;}
+  .escalation-grid{grid-template-columns:1fr 1fr;}
+  .prob-cell{font-size:14px;}
+}
+@media(max-width:480px){
+  .analytics-kpi-strip{grid-template-columns:1fr 1fr;}
+  .analytics-kpi .ak-value{font-size:18px;}
+  .analytics-kpi .ak-sub{font-size:8px;}
+  .escalation-grid{grid-template-columns:1fr;}
+}
 </style>
 <base target="_blank">
 </head>
@@ -1114,62 +1494,164 @@ input::placeholder{color:var(--text-dim);}
   </div>
 </header>
 
-<!-- ═══════════════ ANALYTICS PAGE ═══════════════ -->
+<!-- ═══════════════ ANALYTICS PAGE (REDESIGNED) ═══════════════ -->
 <div class="page active" id="page-analytics">
-  <div class="filter-bar">
-    <div class="filter-group">
-      <label>Strategy</label>
-      <select id="filterSystem"><option value="ALL">All Strategies</option></select>
+  <div class="analytics-main">
+
+    <!-- KPI Strip -->
+    <div class="analytics-kpi-strip" id="analyticsKpiStrip"></div>
+
+    <!-- Instrument + Strategy Filter -->
+    <div class="analytics-section">
+      <div class="analytics-section-header">
+        <h2>🔍 Filter by Instrument</h2>
+        <span class="section-sub">Select multiple instruments to compare</span>
+      </div>
+      <div style="padding:0 16px 16px;">
+        <div class="instrument-checkboxes" id="instrumentCheckboxes"></div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding:14px 16px 16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;">🧠</span>
+            <span style="font-size:12px;font-weight:800;">Filter by Strategy</span>
+            <span style="font-size:9px;color:var(--text-dim);font-family:Space Mono,monospace;">&nbsp;— Win Probability table updates per selection</span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="selectAllStrategies()" style="background:none;border:1px solid var(--border);color:var(--text-dim);padding:3px 10px;border-radius:6px;font-family:Space Mono,monospace;font-size:9px;cursor:pointer;" >All</button>
+            <button onclick="clearAllStrategies()" style="background:none;border:1px solid var(--border);color:var(--text-dim);padding:3px 10px;border-radius:6px;font-family:Space Mono,monospace;font-size:9px;cursor:pointer;" >None</button>
+          </div>
+        </div>
+        <div class="instrument-checkboxes" id="strategyCheckboxes"></div>
+      </div>
     </div>
-    <div class="filter-group">
-      <label>Instrument</label>
-      <select id="filterInstrument"><option value="ALL">All Instruments</option></select>
+
+    <!-- Tier Win Probability Matrix -->
+    <div class="analytics-section">
+      <div class="analytics-section-header">
+        <h2>🎯 Win Probability by Tier</h2>
+        <span class="section-sub">Probability of winning at each tier level</span>
+      </div>
+      <div class="prob-matrix-wrap">
+        <table class="prob-matrix" id="winProbMatrix">
+          <thead>
+            <tr>
+              <th style="text-align:left;">Instrument</th>
+              <th>L1 Win%</th>
+              <th>L2 Win%</th>
+              <th>L3 Win%</th>
+              <th>L4 Win%</th>
+              <th>L5 Win%</th>
+              <th>Overall Recovery</th>
+            </tr>
+          </thead>
+          <tbody id="winProbBody"></tbody>
+        </table>
+      </div>
     </div>
-    <div class="filter-group">
-      <label>Outcome</label>
-      <select id="filterOutcome">
-        <option value="ALL">All Outcomes</option>
-        <option value="Clean win">Clean Win</option>
-        <option value="L2 recovered">L2 Recovered</option>
-        <option value="L3 recovered">L3 Recovered</option>
-        <option value="L4 recovered">L4 Recovered</option>
-        <option value="L5 recovered">L5 Recovered</option>
-        <option value="Max loss">Max Loss</option>
-      </select>
+
+    <!-- Escalation Probability -->
+    <div class="analytics-section">
+      <div class="analytics-section-header">
+        <h2>📈 Escalation Probability</h2>
+        <span class="section-sub">Chance of reaching each tier from the previous loss</span>
+      </div>
+      <div class="escalation-grid" id="escalationGrid"></div>
     </div>
-    <span class="badge-count" id="tradeCountBadge" style="margin-left:auto;">— trades</span>
+
+    <!-- Risk Calculator -->
+    <div class="analytics-section">
+      <div class="analytics-section-header">
+        <h2>🧮 Risk Calculator</h2>
+        <span class="section-sub">Martingale model · TP 15 pips · SL 30 pips · Risk = Cum × 2</span>
+      </div>
+
+      <!-- Full Martingale Table -->
+      <div style="overflow-x:auto;padding:0 16px 16px;">
+        <table class="mart-table" id="martingaleTable">
+          <thead>
+            <tr>
+              <th>Level</th>
+              <th>Cumulative Before</th>
+              <th>Risk This Trade</th>
+              <th>If Loss</th>
+              <th>New Cumulative</th>
+              <th>Recovery Trades</th>
+              <th>% of Balance</th>
+            </tr>
+          </thead>
+          <tbody id="martBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Live Calculator -->
+      <div style="border-top:1px solid var(--border);padding:16px;">
+        <div class="risk-calc-grid">
+          <div class="risk-model-card">
+            <h3>⚡ Live Calculator</h3>
+            <div class="calc-inputs">
+              <div class="calc-group">
+                <label>Current Level (entering this trade)</label>
+                <select id="calcTier" onchange="updateRiskCalc()">
+                  <option value="1">L1 — Starting position</option>
+                  <option value="2">L2 — After L1 loss</option>
+                  <option value="3">L3 — After L2 loss</option>
+                  <option value="4">L4 — After L3 loss</option>
+                  <option value="5">L5 — After L4 loss</option>
+                  <option value="6">L6 — After L5 loss</option>
+                  <option value="7">L7 — After L6 loss</option>
+                  <option value="8">L8 — After L7 loss</option>
+                </select>
+              </div>
+              <div class="calc-group">
+                <label>Lot Multiplier</label>
+                <input type="number" id="calcMultiplier" value="1" min="0.01" step="0.01" oninput="updateRiskCalc()">
+              </div>
+              <div class="calc-group">
+                <label>Account Balance ($)</label>
+                <input type="number" id="calcBalance" placeholder="e.g. 500" oninput="updateRiskCalc()">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
+              <div class="calc-result-box">
+                <div class="cr-label">Risk This Trade</div>
+                <div class="cr-value" id="calcNextRisk">$3.00</div>
+                <div class="cr-detail" id="calcCumulativeDetail">Cum. before: $0.00</div>
+              </div>
+              <div class="calc-result-box">
+                <div class="cr-label">New Cumulative If Loss</div>
+                <div class="cr-value" style="color:var(--loss);" id="calcTotalAtRisk">$3.00</div>
+                <div class="cr-detail" id="calcPctDetail">—</div>
+              </div>
+              <div class="calc-result-box">
+                <div class="cr-label">Recovery Trades Needed</div>
+                <div class="cr-value" style="color:var(--warn);" id="calcRecovery">2</div>
+                <div class="cr-detail">at TP 15 pips each</div>
+              </div>
+              <div class="calc-result-box">
+                <div class="cr-label">Risk:Reward Context</div>
+                <div class="cr-value" style="color:var(--l3);" id="calcRR">1 : 0.5</div>
+                <div class="cr-detail">SL 30 pip / TP 15 pip</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="risk-model-card" style="display:flex;flex-direction:column;gap:8px;">
+            <h3>⚠️ Drawdown Warning Levels</h3>
+            <div id="ddWarnings" style="display:flex;flex-direction:column;gap:6px;"></div>
+            <div style="margin-top:auto;padding-top:10px;border-top:1px solid var(--border);">
+              <div style="font-size:9px;color:var(--text-dim);font-family:'Space Mono',monospace;line-height:1.8;">
+                <div>TP = <strong style="color:var(--win)">15 pips</strong> &nbsp;|&nbsp; SL = <strong style="color:var(--loss)">30 pips</strong></div>
+                <div>RR = 1:0.5 &nbsp;(need 2 wins per loss to break even)</div>
+                <div>Formula: Risk = Cumulative × 2</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
-  <main>
-    <div class="kpi-grid" id="kpiGrid"></div>
-    <div class="outcome-row" id="outcomePills"></div>
-    <div class="tier-flow" id="tierFlow"></div>
-    <div class="charts-grid">
-      <div class="chart-card chart-wide">
-        <h3>Win Rate by Instrument × Tier</h3>
-        <div class="chart-container"><canvas id="instrumentTierChart"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <h3>Outcome Distribution</h3>
-        <div class="chart-container"><canvas id="outcomeDonut"></canvas></div>
-      </div>
-      <div class="chart-card chart-wide">
-        <h3>Tier Escalation Frequency</h3>
-        <div class="chart-container"><canvas id="escalationBar"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <h3>L1 Win Rate by Instrument</h3>
-        <div class="chart-container"><canvas id="l1WinChart"></canvas></div>
-      </div>
-    </div>
-    <div class="table-card">
-      <div class="table-card-header">
-        <h3>Instrument Performance Breakdown</h3>
-      </div>
-      <table><thead><tr>
-        <th>Instrument</th><th>Trades</th><th>L1 Win%</th><th>L2 Win%</th><th>L3+ Win%</th><th>Clean Wins</th><th>Max Losses</th><th>Grade</th>
-      </tr></thead><tbody id="perfTableBody"></tbody></table>
-    </div>
-  </main>
 </div>
 
 <!-- ═══════════════ TRADE ENTRY PAGE ═══════════════ -->
@@ -2209,17 +2691,459 @@ function renderPerfTable(s) {
   }).join('');
 }
 
-function renderAnalytics() {
-  const filtered=getFiltered();
-  document.getElementById('tradeCountBadge').textContent=filtered.length+' trades';
-  if (!filtered.length) { document.getElementById('kpiGrid').innerHTML='<div style="color:var(--text-dim);font-family:Space Mono,monospace;font-size:12px;padding:20px">No trades match filters.</div>'; return; }
-  const s=computeStats(filtered);
-  renderKPIs(s); renderOutcomePills(s); renderTierFlow(s); renderCharts(s); renderPerfTable(s);
+// ══════════════════════════════════════════════════════
+//  ANALYTICS — TIER PROBABILITY MATRICES
+// ══════════════════════════════════════════════════════
+
+// Martingale model: TP=15 pips, SL=30 pips (1:2 RR)
+// Risk at each level = Cumulative_before × 2 (to recover + profit)
+// Recovery trades needed = Risk / TP_per_trade ($1 per pip base)
+const MARTINGALE = [
+  { level:'L1', cumBefore:0,      risk:3.00,    ifLoss:-3.00,    newCum:3.00,     recovery:2    },
+  { level:'L2', cumBefore:3.00,   risk:4.50,    ifLoss:-4.50,    newCum:7.50,     recovery:5    },
+  { level:'L3', cumBefore:7.50,   risk:15.00,   ifLoss:-15.00,   newCum:22.50,    recovery:15   },
+  { level:'L4', cumBefore:22.50,  risk:45.00,   ifLoss:-45.00,   newCum:67.50,    recovery:45   },
+  { level:'L5', cumBefore:67.50,  risk:135.00,  ifLoss:-135.00,  newCum:202.50,   recovery:135  },
+  { level:'L6', cumBefore:202.50, risk:405.00,  ifLoss:-405.00,  newCum:607.50,   recovery:405  },
+  { level:'L7', cumBefore:607.50, risk:1215.00, ifLoss:-1215.00, newCum:1822.50,  recovery:1215 },
+  { level:'L8', cumBefore:1822.50,risk:3645.00, ifLoss:-3645.00, newCum:5467.50,  recovery:3645 },
+];
+const RISK_VALUES = MARTINGALE.map(m => m.risk);
+const RISK_TIERS  = MARTINGALE.map(m => m.level);
+const RISK_COLORS = ['var(--win)','var(--l2)','var(--l3)','var(--l4)','var(--l5)','#a855f7','#ec4899','#f97316'];
+
+let selectedInstruments = new Set();
+let selectedStrategies = new Set(); // empty = all strategies
+
+function getAllInstruments() {
+  const instruments = [...new Set(allTrades.map(t => t.instrument).filter(Boolean))].sort();
+  return instruments;
 }
 
-// ══════════════════════════════════════════════════════
-//  DROPDOWNS
-// ══════════════════════════════════════════════════════
+function buildInstrumentCheckboxes() {
+  const instruments = getAllInstruments();
+  const container = document.getElementById('instrumentCheckboxes');
+  if (!container) return;
+
+  if (selectedInstruments.size === 0) {
+    instruments.forEach(i => selectedInstruments.add(i));
+  }
+
+  container.innerHTML = instruments.map(ins => {
+    const count = allTrades.filter(t => t.instrument === ins).length;
+    const checked = selectedInstruments.has(ins) ? 'checked' : '';
+    return `
+      <label class="instr-check">
+        <input type="checkbox" value="${ins}" ${checked} onchange="toggleInstrument('${ins}')">
+        <span>${ins.toUpperCase()}</span>
+        <span class="check-count">(${count})</span>
+      </label>
+    `;
+  }).join('');
+
+  // Always (re)build strategy checkboxes alongside
+  buildStrategyCheckboxes();
+}
+
+function toggleInstrument(ins) {
+  if (selectedInstruments.has(ins)) {
+    selectedInstruments.delete(ins);
+  } else {
+    selectedInstruments.add(ins);
+  }
+  renderAnalytics();
+}
+
+function getFilteredTrades() {
+  const noStrategies = selectedStrategies.size === 1 && selectedStrategies.has('__NONE__');
+  return allTrades.filter(t => {
+    const insOk = selectedInstruments.size === 0 || selectedInstruments.has(t.instrument);
+    const sysOk = noStrategies ? false
+                : selectedStrategies.size === 0 || selectedStrategies.has(t.system || '');
+    return insOk && sysOk;
+  });
+}
+
+function getAllStrategyKeys() {
+  // Returns all distinct system values in allTrades (including empty string as "No Strategy")
+  return [...new Set(allTrades.map(t => t.system || ''))].sort();
+}
+
+function buildStrategyCheckboxes() {
+  const container = document.getElementById('strategyCheckboxes');
+  if (!container) return;
+  const strategies = getAllStrategyKeys();
+
+  if (selectedStrategies.size === 0) {
+    strategies.forEach(s => selectedStrategies.add(s));
+  }
+
+  const STRAT_COLORS = {
+    '35/15': 'var(--accent)',
+    'Continuation': 'var(--l2)',
+    'Reversal': 'var(--accent2)',
+  };
+
+  container.innerHTML = strategies.map(s => {
+    const count = allTrades.filter(t => (t.system || '') === s).length;
+    const checked = selectedStrategies.has(s) ? 'checked' : '';
+    const label = s || 'No Strategy';
+    const color = STRAT_COLORS[s] || 'var(--l3)';
+    // L1 win rate for this strategy
+    const stTrades = allTrades.filter(t => (t.system || '') === s);
+    const l1w = stTrades.filter(t => t.l1_wl === 'W').length;
+    const l1pct = stTrades.length ? Math.round(l1w / stTrades.length * 100) : 0;
+    const pctColor = l1pct >= 70 ? 'var(--win)' : l1pct >= 50 ? 'var(--warn)' : 'var(--loss)';
+    return `
+      <label class="instr-check strat-check" style="border-color:${checked ? color : 'var(--border)'};">
+        <input type="checkbox" value="${s}" ${checked} onchange="toggleStrategy('${s.replace(/'/g,"\'")}')">
+        <span style="color:${color}">${label}</span>
+        <span class="check-count">(${count})</span>
+        <span class="strat-badge" style="background:rgba(0,0,0,0.3);color:${pctColor};border:1px solid ${pctColor}22;padding:1px 5px;border-radius:4px;font-size:9px;font-family:'Space Mono',monospace;margin-left:2px;">L1 ${l1pct}%</span>
+      </label>
+    `;
+  }).join('');
+}
+
+function toggleStrategy(s) {
+  if (selectedStrategies.has(s)) {
+    selectedStrategies.delete(s);
+  } else {
+    selectedStrategies.add(s);
+  }
+  // Refresh checkbox border colors
+  buildStrategyCheckboxes();
+  renderAnalytics();
+}
+
+function selectAllStrategies() {
+  selectedStrategies.clear();
+  buildStrategyCheckboxes();
+  renderAnalytics();
+}
+
+function clearAllStrategies() {
+  // Use sentinel '__NONE__' to mean "no strategies selected"
+  selectedStrategies = new Set(['__NONE__']);
+  buildStrategyCheckboxes();
+  renderAnalytics();
+}
+
+function computeTierStats(trades) {
+  const stats = {
+    total: trades.length,
+    l1: { reached: 0, wins: 0 },
+    l2: { reached: 0, wins: 0 },
+    l3: { reached: 0, wins: 0 },
+    l4: { reached: 0, wins: 0 },
+    l5: { reached: 0, wins: 0 },
+    recovery: 0,
+    cleanWins: 0
+  };
+
+  trades.forEach(t => {
+    stats.l1.reached++;
+    if (t.l1_wl === 'W') stats.l1.wins++;
+
+    if (t.l1_wl === 'L') {
+      stats.l2.reached++;
+      if (t.l2_wl === 'W') stats.l2.wins++;
+    }
+
+    if (t.l1_wl === 'L' && t.l2_wl === 'L') {
+      stats.l3.reached++;
+      if (t.l3_wl === 'W') stats.l3.wins++;
+    }
+
+    if (t.l1_wl === 'L' && t.l2_wl === 'L' && t.l3_wl === 'L') {
+      stats.l4.reached++;
+      if (t.l4_wl === 'W') stats.l4.wins++;
+    }
+
+    if (t.l1_wl === 'L' && t.l2_wl === 'L' && t.l3_wl === 'L' && t.l4_wl === 'L') {
+      stats.l5.reached++;
+      if (t.l5_wl === 'W') stats.l5.wins++;
+    }
+
+    if (t.outcome !== 'Max loss') stats.recovery++;
+    if (t.outcome === 'Clean win') stats.cleanWins++;
+  });
+
+  return stats;
+}
+
+function formatPct(wins, total) {
+  if (!total) return '<span class="na">—</span>';
+  const pct = (wins / total * 100).toFixed(1);
+  const cls = pct >= 70 ? 'high' : pct >= 50 ? 'mid' : 'low';
+  return `<span class="prob-cell ${cls}">${pct}%</span><div class="cell-detail">${wins}/${total}</div>`;
+}
+
+function renderKPIs(trades) {
+  const stats = computeTierStats(trades);
+  const l1wr = stats.l1.reached ? (stats.l1.wins / stats.l1.reached * 100).toFixed(1) : 0;
+  const recRate = stats.total ? (stats.recovery / stats.total * 100).toFixed(1) : 0;
+  const maxLoss = stats.total - stats.recovery;
+
+  document.getElementById('analyticsKpiStrip').innerHTML = `
+    <div class="analytics-kpi green">
+      <div class="ak-label">Total Trades</div>
+      <div class="ak-value">${stats.total}</div>
+      <div class="ak-sub">${selectedInstruments.size} instrument${selectedInstruments.size!==1?'s':''}</div>
+    </div>
+    <div class="analytics-kpi green">
+      <div class="ak-label">Recovery Rate</div>
+      <div class="ak-value">${recRate}%</div>
+      <div class="ak-sub">${stats.recovery} of ${stats.total}</div>
+    </div>
+    <div class="analytics-kpi blue">
+      <div class="ak-label">L1 Win Rate</div>
+      <div class="ak-value">${l1wr}%</div>
+      <div class="ak-sub">${stats.l1.wins} / ${stats.l1.reached}</div>
+    </div>
+    <div class="analytics-kpi purple">
+      <div class="ak-label">Clean Wins</div>
+      <div class="ak-value">${stats.cleanWins}</div>
+      <div class="ak-sub">${stats.total ? (stats.cleanWins/stats.total*100).toFixed(1) : 0}% of trades</div>
+    </div>
+    <div class="analytics-kpi red">
+      <div class="ak-label">Max Losses</div>
+      <div class="ak-value">${maxLoss}</div>
+      <div class="ak-sub">${stats.total ? (maxLoss/stats.total*100).toFixed(1) : 0}% blow-through</div>
+    </div>
+  `;
+}
+
+function renderWinProbMatrix() {
+  const noStrategies = selectedStrategies.size === 1 && selectedStrategies.has('__NONE__');
+  const activeStrategies = noStrategies ? []
+    : selectedStrategies.size === 0 ? getAllStrategyKeys()
+    : [...selectedStrategies].filter(s => s !== '__NONE__').sort();
+
+  const STRAT_COLORS = { '35/15':'var(--accent)', 'Continuation':'var(--l2)', 'Reversal':'var(--accent2)' };
+
+  // Show strategy breakdown rows when strategies are filtered (not all selected)
+  const allStratKeys = getAllStrategyKeys();
+  const stratFiltered = activeStrategies.length < allStratKeys.length && activeStrategies.length > 0;
+
+  const instruments = [...selectedInstruments].sort();
+  const allStats = computeTierStats(getFilteredTrades());
+
+  let rows = '';
+
+  if (stratFiltered && activeStrategies.length > 1) {
+    // Show one row per active strategy (across all selected instruments)
+    activeStrategies.forEach(sys => {
+      const color = STRAT_COLORS[sys] || 'var(--l3)';
+      const label = sys || 'No Strategy';
+      const sysTrades = allTrades.filter(t =>
+        selectedInstruments.has(t.instrument) && (t.system || '') === sys
+      );
+      if (!sysTrades.length) return;
+      const s = computeTierStats(sysTrades);
+      rows += `
+        <tr>
+          <td class="row-label">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;flex-shrink:0;"></span>
+            <span style="color:${color};font-weight:800;">${label}</span>
+            <span class="row-sub">${s.total} trades</span>
+          </td>
+          <td>${formatPct(s.l1.wins, s.l1.reached)}</td>
+          <td>${formatPct(s.l2.wins, s.l2.reached)}</td>
+          <td>${formatPct(s.l3.wins, s.l3.reached)}</td>
+          <td>${formatPct(s.l4.wins, s.l4.reached)}</td>
+          <td>${formatPct(s.l5.wins, s.l5.reached)}</td>
+          <td>${formatPct(s.recovery, s.total)}</td>
+        </tr>
+      `;
+    });
+    // Separator before instrument rows
+    if (instruments.length > 1) {
+      rows += `<tr><td colspan="7" style="padding:4px 16px;font-size:9px;color:var(--text-dim);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;background:var(--bg);">By Instrument</td></tr>`;
+    }
+  }
+
+  // Instrument rows (filtered by active strategies)
+  instruments.forEach(ins => {
+    const insTrades = allTrades.filter(t =>
+      t.instrument === ins && (
+        noStrategies ? false
+        : selectedStrategies.size === 0 || selectedStrategies.has(t.system || '')
+      )
+    );
+    if (!insTrades.length) return;
+    const s = computeTierStats(insTrades);
+    rows += `
+      <tr>
+        <td class="row-label">${ins.toUpperCase()}<span class="row-sub">${s.total} trades</span></td>
+        <td>${formatPct(s.l1.wins, s.l1.reached)}</td>
+        <td>${formatPct(s.l2.wins, s.l2.reached)}</td>
+        <td>${formatPct(s.l3.wins, s.l3.reached)}</td>
+        <td>${formatPct(s.l4.wins, s.l4.reached)}</td>
+        <td>${formatPct(s.l5.wins, s.l5.reached)}</td>
+        <td>${formatPct(s.recovery, s.total)}</td>
+      </tr>
+    `;
+  });
+
+  rows += `
+    <tr class="total-row">
+      <td class="row-label">ALL SELECTED<span class="row-sub">${allStats.total} trades</span></td>
+      <td>${formatPct(allStats.l1.wins, allStats.l1.reached)}</td>
+      <td>${formatPct(allStats.l2.wins, allStats.l2.reached)}</td>
+      <td>${formatPct(allStats.l3.wins, allStats.l3.reached)}</td>
+      <td>${formatPct(allStats.l4.wins, allStats.l4.reached)}</td>
+      <td>${formatPct(allStats.l5.wins, allStats.l5.reached)}</td>
+      <td>${formatPct(allStats.recovery, allStats.total)}</td>
+    </tr>
+  `;
+
+  document.getElementById('winProbBody').innerHTML = rows || '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:30px;font-family:Space Mono,monospace;font-size:12px;">No trades match selected filters.</td></tr>';
+}
+
+function renderEscalationGrid() {
+  const trades = getFilteredTrades();
+  const stats = computeTierStats(trades);
+
+  const escalations = [
+    { tier: 'L2', label: 'Reach L2', desc: 'After L1 loss',
+      prob: stats.l1.reached ? (stats.l2.reached / stats.l1.reached * 100) : 0,
+      count: stats.l2.reached, total: stats.l1.reached, color: 'var(--l2)' },
+    { tier: 'L3', label: 'Reach L3', desc: 'After L2 loss',
+      prob: stats.l2.reached ? (stats.l3.reached / stats.l2.reached * 100) : 0,
+      count: stats.l3.reached, total: stats.l2.reached, color: 'var(--l3)' },
+    { tier: 'L4', label: 'Reach L4', desc: 'After L3 loss',
+      prob: stats.l3.reached ? (stats.l4.reached / stats.l3.reached * 100) : 0,
+      count: stats.l4.reached, total: stats.l3.reached, color: 'var(--l4)' },
+    { tier: 'L5', label: 'Reach L5', desc: 'After L4 loss',
+      prob: stats.l4.reached ? (stats.l5.reached / stats.l4.reached * 100) : 0,
+      count: stats.l5.reached, total: stats.l4.reached, color: 'var(--l5)' },
+    { tier: 'Max', label: 'Max Loss', desc: 'After L5 loss',
+      prob: stats.l5.reached ? ((stats.l5.reached - stats.l5.wins) / stats.l5.reached * 100) : 0,
+      count: stats.l5.reached - stats.l5.wins, total: stats.l5.reached, color: 'var(--loss)' }
+  ];
+
+  document.getElementById('escalationGrid').innerHTML = escalations.map(e => {
+    const pct = e.prob.toFixed(1);
+    const barWidth = Math.min(e.prob, 100);
+    return `
+      <div class="esc-card">
+        <div class="esc-label">${e.label} <span style="color:var(--text-dim)">— ${e.desc}</span></div>
+        <div class="esc-value" style="color:${e.color}">${pct}%</div>
+        <div class="esc-detail">${e.count} of ${e.total} trades</div>
+        <div class="esc-bar">
+          <div class="esc-bar-fill" style="width:${barWidth}%;background:${e.color}"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function updateRiskCalc() {
+  const tierIdx = parseInt((document.getElementById('calcTier') || {}).value || 1) - 1;
+  const multiplier = parseFloat((document.getElementById('calcMultiplier') || {}).value) || 1;
+  const balance = parseFloat((document.getElementById('calcBalance') || {}).value) || 0;
+
+  const m = MARTINGALE[tierIdx];
+  if (!m) return;
+
+  const risk        = m.risk        * multiplier;
+  const cumBefore   = m.cumBefore   * multiplier;
+  const newCum      = m.newCum      * multiplier;
+  const recovery    = m.recovery;
+
+  // Update live calc boxes
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  set('calcNextRisk',       '$' + risk.toFixed(2));
+  set('calcCumulativeDetail', 'Cum. before: $' + cumBefore.toFixed(2));
+  set('calcTotalAtRisk',    '$' + newCum.toFixed(2));
+  set('calcRecovery',       recovery);
+  set('calcRR',             '1 : 0.5');
+
+  if (balance > 0) {
+    const pct = (newCum / balance * 100).toFixed(2);
+    const warn = newCum/balance >= 0.2 ? ' ⚠️' : '';
+    set('calcPctDetail', pct + '% of $' + balance.toFixed(0) + warn);
+  } else {
+    set('calcPctDetail', 'Enter balance to see %');
+  }
+
+  // Render the full martingale table
+  const tbody = document.getElementById('martBody');
+  if (tbody) {
+    const LEVEL_COLORS = ['var(--win)','var(--l2)','var(--l3)','var(--l4)','var(--l5)','#a855f7','#ec4899','#f97316'];
+    const LEVEL_BG     = ['rgba(16,185,129,0.12)','rgba(59,130,246,0.12)','rgba(139,92,246,0.12)',
+                          'rgba(236,72,153,0.12)','rgba(249,115,22,0.12)','rgba(168,85,247,0.12)',
+                          'rgba(236,72,153,0.12)','rgba(249,115,22,0.12)'];
+    tbody.innerHTML = MARTINGALE.map((row, i) => {
+      const r      = row.risk      * multiplier;
+      const cb     = row.cumBefore * multiplier;
+      const nc     = row.newCum    * multiplier;
+      const active = i === tierIdx;
+
+      let pctCell = '<span class="mart-pct-na">—</span>';
+      if (balance > 0) {
+        const pct = (nc / balance * 100);
+        const cls = pct < 5 ? 'mart-pct-ok' : pct < 15 ? 'mart-pct-warn' : 'mart-pct-danger';
+        pctCell = `<span class="${cls}">${pct.toFixed(1)}%</span>`;
+      }
+
+      return `<tr class="${active ? 'mart-active' : ''}">
+        <td><span class="mart-level" style="background:${LEVEL_BG[i]};color:${LEVEL_COLORS[i]}">${row.level}</span></td>
+        <td class="mart-cum">$${cb.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td class="mart-risk">$${r.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td class="mart-loss">-$${r.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td class="mart-cum">$${nc.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td class="mart-rec">${row.recovery}</td>
+        <td>${pctCell}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Drawdown warnings
+  const ddEl = document.getElementById('ddWarnings');
+  if (ddEl && balance > 0) {
+    const thresholds = [
+      { pct:5,  label:'5% Drawdown',  color:'var(--win)' },
+      { pct:10, label:'10% Drawdown', color:'var(--warn)' },
+      { pct:20, label:'20% Drawdown', color:'var(--loss)' },
+      { pct:50, label:'50% Drawdown', color:'var(--loss)' },
+    ];
+    ddEl.innerHTML = thresholds.map(t => {
+      const dollarLevel = balance * t.pct / 100;
+      // Find which tier first exceeds this threshold
+      const hitTier = MARTINGALE.find(m => m.newCum * multiplier >= dollarLevel);
+      const bg = t.pct <= 5 ? 'rgba(16,185,129,0.08)' : t.pct <= 10 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
+      return `<div class="dd-warning" style="background:${bg};border:1px solid ${t.color}22;">
+        <span style="color:${t.color};font-weight:700;">${t.label}</span>
+        <span style="color:var(--text-dim);">$${dollarLevel.toFixed(2)}</span>
+        <span style="color:var(--text);">${hitTier ? 'Breached at ' + hitTier.level : 'Not reached'}</span>
+      </div>`;
+    }).join('');
+  } else if (ddEl) {
+    ddEl.innerHTML = '<div style="color:var(--text-dim);font-size:11px;font-family:Space Mono,monospace;padding:8px 0;">Enter account balance to see drawdown levels</div>';
+  }
+}
+
+function renderAnalytics() {
+  const trades = getFilteredTrades();
+
+  if (!trades.length) {
+    document.getElementById('analyticsKpiStrip').innerHTML = 
+      '<div style="color:var(--text-dim);font-family:Space Mono,monospace;font-size:12px;padding:20px">No trades match selected instruments.</div>';
+    document.getElementById('winProbBody').innerHTML = 
+      '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:30px;font-family:Space Mono,monospace;font-size:12px;">Select at least one instrument to view data.</td></tr>';
+    document.getElementById('escalationGrid').innerHTML = 
+      '<div style="color:var(--text-dim);font-family:Space Mono,monospace;font-size:12px;padding:20px;text-align:center;width:100%">No data available.</div>';
+    return;
+  }
+
+  renderKPIs(trades);
+  renderWinProbMatrix();
+  renderEscalationGrid();
+}
+
+
 function refreshDropdowns() {
   const systems=[...new Set(allTrades.map(t=>t.system).filter(Boolean))].sort();
   const instruments=[...new Set(allTrades.map(t=>t.instrument).filter(Boolean))].sort();
@@ -2247,143 +3171,9 @@ function showToast(msg, isError=false) {
 // ══════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════
-async function init() {
-  applySmartDate();
-
-  buildTierForm();
-
-  allTrades = await loadTrades();
-  // Give every embedded trade a stable id
-  allTrades.forEach((t,i)=>{ if(!t._id) t._id='emb_'+i; });
-
-  refreshStrategyDropdown();
-  refreshDropdowns();
-
-  ['filterSystem','filterInstrument','filterOutcome'].forEach(id=>{
-    document.getElementById(id).addEventListener('change', renderAnalytics);
-  });
-
-  renderAnalytics();
-  renderLogTable('');
-}
-
-// ══════════════════════════════════════════════════════
-//  EDIT TRADE
-// ══════════════════════════════════════════════════════
-const editTierState = { L1:null, L2:null, L3:null, L4:null, L5:null };
-
-function buildEditTierGrid(trade) {
-  const tiers = ['L1','L2','L3','L4','L5'];
-  const colors = { L1:'var(--win)', L2:'var(--l2)', L3:'var(--l3)', L4:'var(--l4)', L5:'var(--l5)' };
-  editTierState.L1 = trade.l1_wl||null;
-  editTierState.L2 = trade.l2_wl||null;
-  editTierState.L3 = trade.l3_wl||null;
-  editTierState.L4 = trade.l4_wl||null;
-  editTierState.L5 = trade.l5_wl||null;
-
-  document.getElementById('editTierGrid').innerHTML = tiers.map((tier,i) => {
-    const val = editTierState[tier];
-    return `<div class="edit-tier-col">
-      <label style="color:${colors[tier]}">${tier}</label>
-      <div class="edit-tier-wl">
-        <button class="edit-toggle ${val==='W'?'active-W':''}" id="etbtn_${tier}_W" onclick="setEditTier('${tier}','W')">W</button>
-        <button class="edit-toggle ${val==='L'?'active-L':''}" id="etbtn_${tier}_L" onclick="setEditTier('${tier}','L')">L</button>
-        ${i>0?`<button class="edit-toggle ${!val?'active-skip':''}" id="etbtn_${tier}_skip" onclick="setEditTier('${tier}',null)">—</button>`:''}
-      </div>
-      <input type="number" id="edit_pips_${tier}" value="${trade[tier.toLowerCase()+'_pips']!=null?trade[tier.toLowerCase()+'_pips']:''}" placeholder="pips" style="width:58px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 6px;border-radius:5px;font-family:'Space Mono',monospace;font-size:10px;text-align:center;">
-    </div>`;
-  }).join('');
-}
-
-function setEditTier(tier, value) {
-  editTierState[tier] = value;
-  const tiers = ['L1','L2','L3','L4','L5'];
-  tiers.forEach(t => {
-    ['W','L','skip'].forEach(v => {
-      const btn = document.getElementById(`etbtn_${t}_${v}`);
-      if (!btn) return;
-      btn.className = 'edit-toggle';
-      if (editTierState[t] === (v==='skip'?null:v)) btn.className = `edit-toggle active-${v}`;
-    });
-  });
-}
-
-function populateEditStrategyDropdown(currentVal) {
-  const strategies = getAllStrategies();
-  const sel = document.getElementById('edit_system');
-  sel.innerHTML = strategies.map(s => `<option value="${s.name}" ${s.name===currentVal?'selected':''}>${s.name}</option>`).join('');
-  // also allow freeform for legacy "Unknown" etc
-  if (!strategies.find(s => s.name === currentVal) && currentVal) {
-    sel.innerHTML = `<option value="${currentVal}" selected>${currentVal}</option>` + sel.innerHTML;
-  }
-}
-
-function openEditModal(id) {
-  const t = allTrades.find(x => String(x._id) === String(id) || String(x.id) === String(id));
-  if (!t) { showToast('⚠️ Trade not found', true); return; }
-  const tradeId = t._id || t.id;
-  document.getElementById('edit_id').value = tradeId;
-  document.getElementById('edit_date').value = t.date || '';
-  document.getElementById('edit_instrument').value = t.instrument || '';
-  document.getElementById('edit_net_pips').value = t.net_pips != null ? t.net_pips : '';
-  document.getElementById('edit_notes').value = t.notes || '';
-  populateEditStrategyDropdown(t.system || '');
-  buildEditTierGrid(t);
-  document.getElementById('editTradeModal').classList.add('open');
-}
-
-function closeEditModal() {
-  document.getElementById('editTradeModal').classList.remove('open');
-}
-
-async function saveEditedTrade() {
-  const id = document.getElementById('edit_id').value;
-  const t = allTrades.find(x => String(x._id) === String(id) || String(x.id) === String(id));
-  if (!t) { showToast('⚠️ Trade not found', true); return; }
-
-  const getPips = tier => {
-    const v = document.getElementById(`edit_pips_${tier}`).value;
-    return v !== '' ? parseFloat(v) : null;
-  };
-
-  const updated = {
-    ...t,
-    date: document.getElementById('edit_date').value,
-    instrument: document.getElementById('edit_instrument').value,
-    system: document.getElementById('edit_system').value,
-    net_pips: document.getElementById('edit_net_pips').value !== '' ? parseFloat(document.getElementById('edit_net_pips').value) : null,
-    notes: document.getElementById('edit_notes').value.trim(),
-    l1_wl: editTierState.L1, l1_pips: getPips('L1'),
-    l2_wl: editTierState.L2, l2_pips: getPips('L2'),
-    l3_wl: editTierState.L3, l3_pips: getPips('L3'),
-    l4_wl: editTierState.L4, l4_pips: getPips('L4'),
-    l5_wl: editTierState.L5, l5_pips: getPips('L5'),
-  };
-  updated.outcome = deriveOutcome(updated);
-
-  try {
-    const realId = t.id || t._id;
-    // Store previous version for undo
-    const prevVersion = { ...t };
-    await updateTrade(realId, updated);
-    // patch in allTrades
-    const idx = allTrades.findIndex(x => String(x._id) === String(id) || String(x.id) === String(id));
-    if (idx !== -1) allTrades[idx] = { ...updated, _id: t._id, id: t.id };
-    pushHistory('edit', { ...updated, _prev: prevVersion });
-    closeEditModal();
-    renderLogTable(document.querySelector('.log-search').value);
-    if (document.getElementById('page-analytics').classList.contains('active')) renderAnalytics();
-    showToast(`✅ Trade updated — ${updated.instrument.toUpperCase()} ${updated.outcome}`);
-  } catch(e) {
-    showToast('❌ Error updating trade: ' + e.message, true);
-  }
-}
-
 // ══════════════════════════════════════════════════════
 //  STRATEGIES
 // ══════════════════════════════════════════════════════
-
-// Built-in strategies + any user-added ones
 let customStrategies = JSON.parse(localStorage.getItem('customStrategies') || '[]');
 
 const BUILTIN_STRATEGIES = [
@@ -2405,9 +3195,12 @@ function getAllStrategies() {
 
 function refreshStrategyDropdown() {
   const sel = document.getElementById('f_system');
+  if (!sel) return;
   const strategies = getAllStrategies();
+  const cur = sel.value;
   sel.innerHTML = '<option value="">Select strategy…</option>' +
     strategies.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+  if (cur) sel.value = cur;
 }
 
 function computeStrategyStats(stratName) {
@@ -2425,9 +3218,13 @@ function computeStrategyStats(stratName) {
   return {total,l1wr:l1w/total,l2wr:l2t?l2w/l2t:null,clean,maxloss,recovery:wins/total};
 }
 
+function grade(pct){if(pct>=.70)return'A';if(pct>=.60)return'B';if(pct>=.50)return'C';if(pct>=.40)return'D';return'F';}
+function pctFmt(w,d){if(!d)return'<span style="color:var(--text-dim)">—</span>';const p=(w/d*100).toFixed(1);const cls=p>=70?'high':p>=50?'mid':'low';return`<span class="prob-cell ${cls}">${p}%</span><div class="cell-detail">${w}/${d}</div>`;}
+
 function renderStrategies() {
   const strategies = getAllStrategies();
   const grid = document.getElementById('strategyGrid');
+  if (!grid) return;
   grid.innerHTML = strategies.map(s => {
     const st = computeStrategyStats(s.name);
     const cls = s.cls || (s.type==='Continuation'?'cont':'rev');
@@ -2453,7 +3250,6 @@ function renderStrategies() {
     </div>`;
   }).join('');
 
-  // Table: strategy × instrument
   const rows = [];
   strategies.forEach(s => {
     const trades = allTrades.filter(t => t.system === s.name);
@@ -2483,20 +3279,20 @@ function renderStrategies() {
       rows.push(`<tr><td style="font-weight:700;color:var(--accent)">${s.name}</td><td colspan="7" style="color:var(--text-dim);font-family:'Space Mono',monospace;font-size:11px;">No trades recorded yet</td></tr>`);
     }
   });
-  document.getElementById('strategyTableBody').innerHTML = rows.join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:30px;font-family:Space Mono,monospace;font-size:12px;">No data yet.</td></tr>';
+  const tbody = document.getElementById('strategyTableBody');
+  if (tbody) tbody.innerHTML = rows.join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:30px;font-family:Space Mono,monospace;font-size:12px;">No data yet.</td></tr>';
 }
 
 function openStrategyModal() {
-  document.getElementById('modal_name').value = '';
-  document.getElementById('modal_desc').value = '';
-  document.getElementById('modal_type').value = 'Continuation';
+  const mn = document.getElementById('modal_name');
+  const md = document.getElementById('modal_desc');
+  const mt = document.getElementById('modal_type');
+  if(mn) mn.value=''; if(md) md.value=''; if(mt) mt.value='Continuation';
   document.getElementById('strategyModal').classList.add('open');
 }
-
 function closeStrategyModal() {
   document.getElementById('strategyModal').classList.remove('open');
 }
-
 function saveNewStrategy() {
   const name = document.getElementById('modal_name').value.trim();
   const desc = document.getElementById('modal_desc').value.trim();
@@ -2513,6 +3309,58 @@ function saveNewStrategy() {
   showToast(`✅ Strategy "${name}" added`);
 }
 
+// Edit strategy dropdown helper
+function populateEditStrategyDropdown(currentVal) {
+  const strategies = getAllStrategies();
+  const sel = document.getElementById('edit_system');
+  if (!sel) return;
+  sel.innerHTML = strategies.map(s => `<option value="${s.name}" ${s.name===currentVal?'selected':''}>${s.name}</option>`).join('');
+  if (!strategies.find(s => s.name === currentVal) && currentVal) {
+    sel.innerHTML = `<option value="${currentVal}" selected>${currentVal}</option>` + sel.innerHTML;
+  }
+}
+
+
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+async function init() {
+  applySmartDate();
+  buildTierForm();
+
+  // Start with embedded trades immediately so UI renders
+  allTrades = [...EMBEDDED_TRADES];
+  allTrades.forEach((t,i)=>{ if(!t._id) t._id='emb_'+i; });
+
+  // Build and render immediately with embedded data
+  refreshStrategyDropdown();
+  buildInstrumentCheckboxes();
+  updateRiskCalc();
+  renderAnalytics();
+  renderLogTable('');
+
+  // Try to load from Supabase in background
+  if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+    try {
+      const sbTrades = await loadTrades();
+      if (sbTrades && sbTrades.length > 0) {
+        allTrades = sbTrades;
+        allTrades.forEach((t,i)=>{ if(!t._id) t._id='sb_'+i; });
+        showToast('🟢 Supabase connected (' + sbTrades.length + ' trades)');
+        // Rebuild everything with Supabase data
+        selectedInstruments.clear();
+        refreshStrategyDropdown();
+        buildInstrumentCheckboxes();
+        renderAnalytics();
+        renderLogTable('');
+      }
+    } catch(e) {
+      console.warn('Supabase load failed, using embedded trades:', e);
+      showToast('📦 Using local data (' + allTrades.length + ' trades)', true);
+    }
+  }
+}
 init();
 
 </script>
