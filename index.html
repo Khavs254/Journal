@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>5-Tier Trading Journal</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -2138,7 +2139,18 @@ CREATE TABLE IF NOT EXISTS public.trades (
   created_at    timestamptz DEFAULT now()
 );
 ALTER TABLE public.trades ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all" ON public.trades FOR ALL USING (true) WITH CHECK (true);`;
+CREATE POLICY "Allow all" ON public.trades FOR ALL USING (true) WITH CHECK (true);
+
+-- Enables cross-device live sync (Realtime) for this table
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'trades'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.trades;
+  END IF;
+END $$;`;
 
   // Inject setup banner at top of body
   const banner = document.createElement('div');
@@ -2307,6 +2319,99 @@ async function deleteTrade(id) {
   }
   allTrades = allTrades.filter(t => t._id !== id && t.id !== id);
   sessionTrades = sessionTrades.filter(t => t._id !== id && t.id !== id);
+}
+
+// ══════════════════════════════════════════════════════
+//  REALTIME SYNC (cross-device/cross-tab live updates)
+// ══════════════════════════════════════════════════════
+let realtimeChannel = null;
+
+function updateSyncBadgeCount() {
+  const badge = document.getElementById('syncBadge');
+  if (badge && badge.textContent.includes('Supabase')) {
+    badge.textContent = `🟢 Supabase (${allTrades.length} trades)`;
+  }
+}
+
+function refreshAfterRemoteChange() {
+  refreshStrategyDropdown();
+  buildInstrumentCheckboxes();
+  renderLogTable(document.querySelector('.log-search')?.value || '');
+  const analyticsPage = document.getElementById('page-analytics');
+  if (analyticsPage && analyticsPage.classList.contains('active')) renderAnalytics();
+  const strategiesPage = document.getElementById('page-strategies');
+  if (strategiesPage && strategiesPage.classList.contains('active')) renderStrategies();
+  updateSyncBadgeCount();
+}
+
+async function refreshTradesFromServer() {
+  if (!USE_SUPABASE || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?select=*&order=created_at.desc`, { headers: SB_HEADERS });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!Array.isArray(data)) return;
+    data.forEach(t => { if (!t._id) t._id = t.id; });
+    allTrades = data;
+    refreshAfterRemoteChange();
+  } catch(e) {
+    // Silent — this is just a background safety-net refresh, not a user action.
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  // Mobile browsers suspend the realtime websocket while the screen is off
+  // or the tab is backgrounded. Re-sync as soon as the device/tab is active
+  // again, so nothing is missed even if a realtime event slipped through.
+  if (document.visibilityState === 'visible') {
+    refreshTradesFromServer();
+  }
+});
+
+function subscribeRealtime() {
+  if (!USE_SUPABASE || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
+  if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
+    console.warn('Supabase JS client failed to load — live sync between devices is disabled, but saving/loading still works.');
+    return;
+  }
+  if (realtimeChannel) return; // already subscribed
+
+  const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  realtimeChannel = client
+    .channel('trades-live-sync')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: SUPABASE_TABLE }, (payload) => {
+      const row = payload.new;
+      if (!row || !row.id) return;
+      // Skip if this device already has it (e.g. it's the one that just added it)
+      if (allTrades.some(t => t.id === row.id || t._id === row.id)) return;
+      row._id = row.id;
+      allTrades.unshift(row);
+      refreshAfterRemoteChange();
+      showToast('🔄 New trade synced from another device');
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: SUPABASE_TABLE }, (payload) => {
+      const row = payload.new;
+      if (!row || !row.id) return;
+      const idx = allTrades.findIndex(t => t.id === row.id || t._id === row.id);
+      row._id = row.id;
+      if (idx === -1) { allTrades.unshift(row); } else { allTrades[idx] = row; }
+      refreshAfterRemoteChange();
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: SUPABASE_TABLE }, (payload) => {
+      const oldRow = payload.old;
+      if (!oldRow || !oldRow.id) return;
+      allTrades = allTrades.filter(t => t.id !== oldRow.id && t._id !== oldRow.id);
+      sessionTrades = sessionTrades.filter(t => t.id !== oldRow.id && t._id !== oldRow.id);
+      refreshAfterRemoteChange();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('Realtime sync connected — changes from other devices will appear live.');
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('Realtime sync unavailable (status: ' + status + '). Run the Realtime setup SQL in Supabase if this persists — see the DB setup banner SQL.');
+      }
+    });
 }
 
 // ══════════════════════════════════════════════════════
@@ -3407,6 +3512,7 @@ async function init() {
       console.warn('Supabase load failed, using embedded trades:', e);
       showToast('📦 Using local data (' + allTrades.length + ' trades)', true);
     }
+    subscribeRealtime();
   }
 }
 init();
