@@ -2223,29 +2223,32 @@ async function loadTrades() {
       const data = await res.json();
       if (!Array.isArray(data)) { throw new Error('Non-array response: ' + JSON.stringify(data).slice(0,120)); }
 
-      // If Supabase has fewer trades than the embedded snapshot, it means the
-      // embedded trades haven't been synced yet — upload them now.
-      if (data.length < EMBEDDED_TRADES.length) {
+      // One-time migration: push the embedded snapshot up ONLY the very
+      // first time the table is empty. This must never re-trigger just
+      // because the live trade count later drops below the snapshot size
+      // (e.g. after deleting trades) — otherwise deletions get silently
+      // undone by wiping the table and re-seeding the old snapshot.
+      const alreadyMigrated = localStorage.getItem('embeddedSyncDone') === '1';
+      if (data.length === 0 && !alreadyMigrated) {
         showToast(`⏫ Syncing ${EMBEDDED_TRADES.length} trades to Supabase…`);
         try {
-          // Clear whatever is there first so we don't get duplicates
-          if (data.length > 0) {
-            await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?id=neq.00000000-0000-0000-0000-000000000000`, {
-              method: 'DELETE',
-              headers: SB_HEADERS
-            });
-          }
           const inserted = await bulkInsertEmbedded(EMBEDDED_TRADES);
           const result = Array.isArray(inserted) ? inserted : EMBEDDED_TRADES;
+          localStorage.setItem('embeddedSyncDone', '1');
           document.getElementById('syncBadge').textContent = `🟢 Supabase (${result.length} trades)`;
           showToast(`✅ ${result.length} trades synced to Supabase`);
           return result;
         } catch(e) {
           showToast('⚠️ Sync failed, using local data — ' + e.message, true);
-          document.getElementById('syncBadge').textContent = `🟡 Supabase partial (${data.length} in DB + ${EMBEDDED_TRADES.length} local)`;
-          // Merge: Supabase rows + embedded rows that aren't already there
-          return [...data, ...EMBEDDED_TRADES.map((t,i)=>({...t,_id:'emb_'+i}))];
+          document.getElementById('syncBadge').textContent = `🟡 Supabase partial (0 in DB + ${EMBEDDED_TRADES.length} local)`;
+          return EMBEDDED_TRADES.map((t,i)=>({...t,_id:'emb_'+i}));
         }
+      }
+      // Any time we see real rows already in the table, consider migration
+      // done — this stops the seed step above from ever firing again, even
+      // if the table is later emptied out on purpose.
+      if (data.length > 0 && !alreadyMigrated) {
+        localStorage.setItem('embeddedSyncDone', '1');
       }
 
       document.getElementById('syncBadge').textContent = `🟢 Supabase (${data.length} trades)`;
@@ -2302,8 +2305,8 @@ async function deleteTrade(id) {
     const m = badge.textContent.match(/\((\d+) trades\)/);
     if (m && +m[1] > 0) badge.textContent = `🟢 Supabase (${+m[1]-1} trades)`;
   }
-  allTrades = allTrades.filter(t => t._id !== id);
-  sessionTrades = sessionTrades.filter(t => t._id !== id);
+  allTrades = allTrades.filter(t => t._id !== id && t.id !== id);
+  sessionTrades = sessionTrades.filter(t => t._id !== id && t.id !== id);
 }
 
 // ══════════════════════════════════════════════════════
@@ -2497,7 +2500,9 @@ async function submitTrade() {
   try {
     const saved = await saveTrade(trade);
     if (!saved || typeof saved !== 'object') throw new Error('Invalid save response');
-    if (!saved._id) saved._id = 'local_' + Date.now();
+    // Prefer the real Supabase row id (so later edits/deletes target the
+    // correct row); only fall back to a synthetic id for true local-only saves.
+    if (!saved._id) saved._id = saved.id || ('local_' + Date.now());
     if (!Array.isArray(allTrades)) allTrades = [];
     allTrades.unshift(saved);
     if (!Array.isArray(sessionTrades)) sessionTrades = [];
@@ -2575,7 +2580,9 @@ async function confirmDelete() {
   if (trade) {
     pushHistory('del', { ...trade });
   }
-  await deleteTrade(pendingDeleteId);
+  // Always delete by the real database id when we have one, not the local _id.
+  const realId = trade ? (trade.id || trade._id) : pendingDeleteId;
+  await deleteTrade(realId);
   pendingDeleteId = null;
   document.getElementById('delConfirmModal').classList.remove('open');
   renderLogTable(document.querySelector('.log-search').value);
@@ -2714,10 +2721,16 @@ const RISK_COLORS = ['var(--win)','var(--l2)','var(--l3)','var(--l4)','var(--l5)
 
 let selectedInstruments = new Set();
 let selectedStrategies = new Set(); // empty = all strategies
+let instrumentsRestoredFromStorage = false;
+let strategiesRestoredFromStorage = false;
 
 function getAllInstruments() {
   const instruments = [...new Set(allTrades.map(t => t.instrument).filter(Boolean))].sort();
   return instruments;
+}
+
+function saveSelectedInstruments() {
+  try { localStorage.setItem('selectedInstruments', JSON.stringify([...selectedInstruments])); } catch(e) {}
 }
 
 function buildInstrumentCheckboxes() {
@@ -2725,8 +2738,18 @@ function buildInstrumentCheckboxes() {
   const container = document.getElementById('instrumentCheckboxes');
   if (!container) return;
 
-  if (selectedInstruments.size === 0) {
-    instruments.forEach(i => selectedInstruments.add(i));
+  if (!instrumentsRestoredFromStorage) {
+    // Only restore/default ONCE per page load. After that, whatever the
+    // user has ticked is the source of truth — rebuilding the checkbox
+    // list (e.g. after the Supabase data arrives) must not stomp it.
+    instrumentsRestoredFromStorage = true;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('selectedInstruments') || 'null'); } catch(e) {}
+    if (Array.isArray(saved) && saved.length) {
+      selectedInstruments = new Set(saved);
+    } else {
+      instruments.forEach(i => selectedInstruments.add(i));
+    }
   }
 
   container.innerHTML = instruments.map(ins => {
@@ -2751,6 +2774,7 @@ function toggleInstrument(ins) {
   } else {
     selectedInstruments.add(ins);
   }
+  saveSelectedInstruments();
   renderAnalytics();
 }
 
@@ -2774,8 +2798,15 @@ function buildStrategyCheckboxes() {
   if (!container) return;
   const strategies = getAllStrategyKeys();
 
-  if (selectedStrategies.size === 0) {
-    strategies.forEach(s => selectedStrategies.add(s));
+  if (!strategiesRestoredFromStorage) {
+    strategiesRestoredFromStorage = true;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('selectedStrategies') || 'null'); } catch(e) {}
+    if (Array.isArray(saved) && saved.length) {
+      selectedStrategies = new Set(saved);
+    } else {
+      strategies.forEach(s => selectedStrategies.add(s));
+    }
   }
 
   const STRAT_COLORS = {
@@ -2805,19 +2836,25 @@ function buildStrategyCheckboxes() {
   }).join('');
 }
 
+function saveSelectedStrategies() {
+  try { localStorage.setItem('selectedStrategies', JSON.stringify([...selectedStrategies])); } catch(e) {}
+}
+
 function toggleStrategy(s) {
   if (selectedStrategies.has(s)) {
     selectedStrategies.delete(s);
   } else {
     selectedStrategies.add(s);
   }
+  saveSelectedStrategies();
   // Refresh checkbox border colors
   buildStrategyCheckboxes();
   renderAnalytics();
 }
 
 function selectAllStrategies() {
-  selectedStrategies.clear();
+  selectedStrategies = new Set(getAllStrategyKeys());
+  saveSelectedStrategies();
   buildStrategyCheckboxes();
   renderAnalytics();
 }
@@ -2825,6 +2862,7 @@ function selectAllStrategies() {
 function clearAllStrategies() {
   // Use sentinel '__NONE__' to mean "no strategies selected"
   selectedStrategies = new Set(['__NONE__']);
+  saveSelectedStrategies();
   buildStrategyCheckboxes();
   renderAnalytics();
 }
@@ -3149,10 +3187,15 @@ function refreshDropdowns() {
   const instruments=[...new Set(allTrades.map(t=>t.instrument).filter(Boolean))].sort();
   const sysSel=document.getElementById('filterSystem');
   const insSel=document.getElementById('filterInstrument');
-  const curSys=sysSel.value, curIns=insSel.value;
-  sysSel.innerHTML='<option value="ALL">All Strategies</option>'+systems.map(s=>`<option value="${s}">${s}</option>`).join('');
-  insSel.innerHTML='<option value="ALL">All Instruments</option>'+instruments.map(i=>`<option value="${i}">${i.toUpperCase()}</option>`).join('');
-  sysSel.value=curSys; insSel.value=curIns;
+  // filterSystem/filterInstrument are legacy selects that no longer exist in
+  // this UI (replaced by the checkbox filters) — guard so a missing element
+  // never throws "Cannot read properties of null (reading 'value')".
+  if (sysSel && insSel) {
+    const curSys=sysSel.value, curIns=insSel.value;
+    sysSel.innerHTML='<option value="ALL">All Strategies</option>'+systems.map(s=>`<option value="${s}">${s}</option>`).join('');
+    insSel.innerHTML='<option value="ALL">All Instruments</option>'+instruments.map(i=>`<option value="${i}">${i.toUpperCase()}</option>`).join('');
+    sysSel.value=curSys; insSel.value=curIns;
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -3346,10 +3389,15 @@ async function init() {
       const sbTrades = await loadTrades();
       if (sbTrades && sbTrades.length > 0) {
         allTrades = sbTrades;
-        allTrades.forEach((t,i)=>{ if(!t._id) t._id='sb_'+i; });
+        // IMPORTANT: prefer the real Supabase row id when one exists. If we
+        // overwrite it with a synthetic 'sb_N' string instead, later
+        // delete/update calls send that fake id to the database, match no
+        // row, silently no-op, and the "deleted" trade reappears on refresh.
+        allTrades.forEach((t,i)=>{ if(!t._id) t._id = t.id || ('sb_'+i); });
         showToast('🟢 Supabase connected (' + sbTrades.length + ' trades)');
-        // Rebuild everything with Supabase data
-        selectedInstruments.clear();
+        // Rebuild everything with Supabase data. NOTE: we deliberately do
+        // NOT clear selectedInstruments here — that used to wipe the user's
+        // saved checkbox selection back to "all" on every single page load.
         refreshStrategyDropdown();
         buildInstrumentCheckboxes();
         renderAnalytics();
