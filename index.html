@@ -531,6 +531,56 @@ input::placeholder{color:var(--text-dim);}
   min-height:36px;
 }
 .log-search:focus{outline:none;border-color:var(--accent);}
+.log-filter-bar{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:10px 16px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.log-filter-select{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:6px 8px;
+  border-radius:7px;
+  font-family:'Space Mono',monospace;
+  font-size:11px;
+  min-height:32px;
+  cursor:pointer;
+}
+.log-filter-select:focus{outline:none;border-color:var(--accent);}
+.log-filter-date{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:5px 8px;
+  border-radius:7px;
+  font-family:'Space Mono',monospace;
+  font-size:11px;
+  min-height:32px;
+}
+.log-filter-date:focus{outline:none;border-color:var(--accent);}
+.log-filter-to-label{font-size:10px;color:var(--text-dim);font-family:'Space Mono',monospace;}
+.log-filter-reset{
+  background:none;
+  border:1px solid var(--loss);
+  color:var(--loss);
+  padding:5px 10px;
+  border-radius:7px;
+  font-family:'Space Mono',monospace;
+  font-size:10px;
+  cursor:pointer;
+  margin-left:auto;
+}
+.log-filter-reset:hover{background:rgba(239,68,68,0.1);}
+@media(max-width:768px){
+  .log-filter-bar{padding:8px 12px;}
+  .log-filter-select,.log-filter-date{font-size:10px;flex:1 1 auto;min-width:90px;}
+  .log-filter-reset{margin-left:0;flex:0 0 auto;}
+}
 .log-table-wrap{overflow-x:auto;max-height:75vh;overflow-y:auto;}
 #logTable th{position:sticky;top:0;z-index:2;}
 .wl-badge{
@@ -1088,6 +1138,60 @@ input::placeholder{color:var(--text-dim);}
    ═══════════════════════════════════════════════ */
 .analytics-main{padding:16px;max-width:1400px;margin:0 auto;}
 
+.analytics-period-bar{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:10px 14px;
+  margin-bottom:16px;
+}
+.period-bar-label{
+  font-size:11px;
+  font-weight:800;
+  color:var(--text-dim);
+  font-family:'Space Mono',monospace;
+  flex-shrink:0;
+}
+.period-pills{display:flex;gap:6px;flex-wrap:wrap;}
+.period-pill{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--text-dim);
+  padding:6px 12px;
+  border-radius:20px;
+  font-family:'Space Mono',monospace;
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+  transition:all .15s;
+}
+.period-pill:hover{border-color:var(--accent);color:var(--text);}
+.period-pill.active{background:var(--accent);border-color:var(--accent);color:#06120f;}
+.period-custom-range{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-left:auto;
+}
+.period-custom-range input[type="date"]{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:5px 8px;
+  border-radius:7px;
+  font-family:'Space Mono',monospace;
+  font-size:11px;
+}
+.period-custom-range input[type="date"]:focus{outline:none;border-color:var(--accent);}
+@media(max-width:768px){
+  .analytics-period-bar{padding:8px 10px;}
+  .period-custom-range{margin-left:0;width:100%;}
+}
+
 .analytics-kpi-strip{
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
@@ -1499,6 +1603,24 @@ input::placeholder{color:var(--text-dim);}
 <div class="page active" id="page-analytics">
   <div class="analytics-main">
 
+    <!-- Time Period Filter -->
+    <div class="analytics-period-bar">
+      <span class="period-bar-label">⏱ Period</span>
+      <div class="period-pills" id="periodPills">
+        <button class="period-pill active" data-period="ALL" onclick="selectPeriodPill('ALL')">All Time</button>
+        <button class="period-pill" data-period="7" onclick="selectPeriodPill('7')">7D</button>
+        <button class="period-pill" data-period="30" onclick="selectPeriodPill('30')">30D</button>
+        <button class="period-pill" data-period="90" onclick="selectPeriodPill('90')">90D</button>
+        <button class="period-pill" data-period="365" onclick="selectPeriodPill('365')">1Y</button>
+        <button class="period-pill" data-period="custom" onclick="selectPeriodPill('custom')">Custom…</button>
+      </div>
+      <div class="period-custom-range" id="analyticsCustomRange" style="display:none">
+        <input type="date" id="analyticsPeriodFrom" onchange="applyAnalyticsCustomRange()">
+        <span style="color:var(--text-dim);font-size:10px;">to</span>
+        <input type="date" id="analyticsPeriodTo" onchange="applyAnalyticsCustomRange()">
+      </div>
+    </div>
+
     <!-- KPI Strip -->
     <div class="analytics-kpi-strip" id="analyticsKpiStrip"></div>
 
@@ -1731,6 +1853,25 @@ input::placeholder{color:var(--text-dim);}
       <div class="log-panel-header">
         <h2>📋 Raw Trade Log <span id="logCount" style="font-size:11px;color:var(--text-dim);font-weight:400;margin-left:8px;font-family:'Space Mono',monospace;"></span></h2>
         <input class="log-search" type="text" placeholder="Search instrument, outcome…" oninput="renderLogTable(this.value)">
+      </div>
+      <div class="log-filter-bar" id="logFilterBar">
+        <select class="log-filter-select" id="logFilterStrategy" onchange="renderLogTable(document.querySelector('.log-search').value)">
+          <option value="ALL">All Strategies</option>
+        </select>
+        <select class="log-filter-select" id="logFilterInstrument" onchange="renderLogTable(document.querySelector('.log-search').value)">
+          <option value="ALL">All Instruments</option>
+        </select>
+        <select class="log-filter-select" id="logFilterPeriod" onchange="onLogPeriodChange()">
+          <option value="ALL">All Time</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="custom">Custom range…</option>
+        </select>
+        <input type="date" class="log-filter-date" id="logFilterFrom" style="display:none" onchange="renderLogTable(document.querySelector('.log-search').value)">
+        <span class="log-filter-to-label" id="logFilterToLabel" style="display:none">to</span>
+        <input type="date" class="log-filter-date" id="logFilterTo" style="display:none" onchange="renderLogTable(document.querySelector('.log-search').value)">
+        <button class="log-filter-reset" id="logFilterReset" onclick="resetLogFilters()" title="Reset filters" style="display:none">✕ Reset</button>
       </div>
       <div class="log-table-wrap">
         <table id="logTable">
@@ -2692,17 +2833,109 @@ function wlBadge(v) {
   return `<span class="wl-badge wl-${v}">${v}</span>`;
 }
 
+function populateLogFilterDropdowns() {
+  const stratSel = document.getElementById('logFilterStrategy');
+  const insSel = document.getElementById('logFilterInstrument');
+  if (!stratSel || !insSel) return;
+
+  const strategies = [...new Set(allTrades.map(t => t.system).filter(Boolean))].sort();
+  const instruments = getAllInstruments();
+
+  const curStrat = stratSel.value || 'ALL';
+  const curIns = insSel.value || 'ALL';
+
+  stratSel.innerHTML = '<option value="ALL">All Strategies</option>' +
+    strategies.map(s => `<option value="${s}">${s}</option>`).join('');
+  insSel.innerHTML = '<option value="ALL">All Instruments</option>' +
+    instruments.map(i => `<option value="${i}">${i.toUpperCase()}</option>`).join('');
+
+  // Preserve selection if the value still exists in the rebuilt list
+  if (strategies.includes(curStrat)) stratSel.value = curStrat;
+  if (instruments.includes(curIns)) insSel.value = curIns;
+}
+
+function onLogPeriodChange() {
+  const period = document.getElementById('logFilterPeriod').value;
+  const fromEl = document.getElementById('logFilterFrom');
+  const toEl = document.getElementById('logFilterTo');
+  const toLabel = document.getElementById('logFilterToLabel');
+  const showCustom = period === 'custom';
+  fromEl.style.display = showCustom ? '' : 'none';
+  toEl.style.display = showCustom ? '' : 'none';
+  toLabel.style.display = showCustom ? '' : 'none';
+  renderLogTable(document.querySelector('.log-search').value);
+}
+
+function resetLogFilters() {
+  document.getElementById('logFilterStrategy').value = 'ALL';
+  document.getElementById('logFilterInstrument').value = 'ALL';
+  document.getElementById('logFilterPeriod').value = 'ALL';
+  document.getElementById('logFilterFrom').value = '';
+  document.getElementById('logFilterTo').value = '';
+  document.getElementById('logFilterFrom').style.display = 'none';
+  document.getElementById('logFilterTo').style.display = 'none';
+  document.getElementById('logFilterToLabel').style.display = 'none';
+  document.querySelector('.log-search').value = '';
+  renderLogTable('');
+}
+
+function logFilterDateRange() {
+  // Returns {from, to} as Date objects (or null) based on the period selector
+  const period = document.getElementById('logFilterPeriod')?.value || 'ALL';
+  if (period === 'ALL') return { from: null, to: null };
+  if (period === 'custom') {
+    const fromVal = document.getElementById('logFilterFrom')?.value;
+    const toVal = document.getElementById('logFilterTo')?.value;
+    return {
+      from: fromVal ? new Date(fromVal + 'T00:00:00') : null,
+      to: toVal ? new Date(toVal + 'T23:59:59') : null
+    };
+  }
+  const days = parseInt(period, 10);
+  const to = new Date();
+  const from = new Date();
+  from.setDate(from.getDate() - days);
+  return { from, to };
+}
+
 function renderLogTable(search) {
+  populateLogFilterDropdowns();
+
   const q = (search||'').toLowerCase();
-  const filtered = allTrades.filter(t =>
-    !q || t.instrument.includes(q) || (t.system||'').toLowerCase().includes(q) ||
-    (t.outcome||'').toLowerCase().includes(q) || (t.notes||'').toLowerCase().includes(q)
-  );
+  const stratFilter = document.getElementById('logFilterStrategy')?.value || 'ALL';
+  const insFilter = document.getElementById('logFilterInstrument')?.value || 'ALL';
+  const { from, to } = logFilterDateRange();
+
+  const anyFilterActive = stratFilter !== 'ALL' || insFilter !== 'ALL' ||
+    (document.getElementById('logFilterPeriod')?.value || 'ALL') !== 'ALL' || q;
+  const resetBtn = document.getElementById('logFilterReset');
+  if (resetBtn) resetBtn.style.display = anyFilterActive ? '' : 'none';
+
+  const filtered = allTrades.filter(t => {
+    const matchesSearch = !q || t.instrument.includes(q) || (t.system||'').toLowerCase().includes(q) ||
+      (t.outcome||'').toLowerCase().includes(q) || (t.notes||'').toLowerCase().includes(q);
+    if (!matchesSearch) return false;
+
+    if (stratFilter !== 'ALL' && (t.system || '') !== stratFilter) return false;
+    if (insFilter !== 'ALL' && t.instrument !== insFilter) return false;
+
+    if (from || to) {
+      if (!t.date) return false;
+      const tDate = new Date(t.date + 'T12:00:00');
+      if (from && tDate < from) return false;
+      if (to && tDate > to) return false;
+    }
+    return true;
+  });
+
   document.getElementById('logCount').textContent = `(${filtered.length} of ${allTrades.length})`;
   const body = document.getElementById('logBody');
   if (!filtered.length) {
     body.innerHTML = '';
     document.getElementById('logEmpty').style.display = 'block';
+    document.getElementById('logEmpty').textContent = anyFilterActive
+      ? 'No trades match the selected filters.'
+      : 'No trades yet. Use the form to add your first trade.';
     return;
   }
   document.getElementById('logEmpty').style.display = 'none';
@@ -2939,14 +3172,68 @@ function toggleInstrument(ins) {
   renderAnalytics();
 }
 
+let analyticsPeriod = 'ALL'; // 'ALL' | '7' | '30' | '90' | '365' | 'custom'
+let analyticsPeriodFrom = null; // Date or null
+let analyticsPeriodTo = null;   // Date or null
+
+function getAnalyticsDateRange() {
+  if (analyticsPeriod === 'ALL') return { from: null, to: null };
+  if (analyticsPeriod === 'custom') {
+    return {
+      from: analyticsPeriodFrom ? new Date(analyticsPeriodFrom + 'T00:00:00') : null,
+      to: analyticsPeriodTo ? new Date(analyticsPeriodTo + 'T23:59:59') : null
+    };
+  }
+  const days = parseInt(analyticsPeriod, 10);
+  const to = new Date();
+  const from = new Date();
+  from.setDate(from.getDate() - days);
+  return { from, to };
+}
+
+function applyPeriodFilter(trades) {
+  const { from, to } = getAnalyticsDateRange();
+  if (!from && !to) return trades;
+  return trades.filter(t => {
+    if (!t.date) return false;
+    const tDate = new Date(t.date + 'T12:00:00');
+    if (from && tDate < from) return false;
+    if (to && tDate > to) return false;
+    return true;
+  });
+}
+
+function selectPeriodPill(value) {
+  document.querySelectorAll('#periodPills .period-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.period === value);
+  });
+  setAnalyticsPeriod(value);
+}
+
+function setAnalyticsPeriod(value) {
+  analyticsPeriod = value;
+  const customRow = document.getElementById('analyticsCustomRange');
+  if (customRow) customRow.style.display = value === 'custom' ? 'flex' : 'none';
+  if (value !== 'custom') {
+    renderAnalytics();
+  }
+}
+
+function applyAnalyticsCustomRange() {
+  analyticsPeriodFrom = document.getElementById('analyticsPeriodFrom').value || null;
+  analyticsPeriodTo = document.getElementById('analyticsPeriodTo').value || null;
+  renderAnalytics();
+}
+
 function getFilteredTrades() {
   const noStrategies = selectedStrategies.size === 1 && selectedStrategies.has('__NONE__');
-  return allTrades.filter(t => {
+  const base = allTrades.filter(t => {
     const insOk = selectedInstruments.size === 0 || selectedInstruments.has(t.instrument);
     const sysOk = noStrategies ? false
                 : selectedStrategies.size === 0 || selectedStrategies.has(t.system || '');
     return insOk && sysOk;
   });
+  return applyPeriodFilter(base);
 }
 
 function getAllStrategyKeys() {
@@ -3135,9 +3422,9 @@ function renderWinProbMatrix() {
     activeStrategies.forEach(sys => {
       const color = STRAT_COLORS[sys] || 'var(--l3)';
       const label = sys || 'No Strategy';
-      const sysTrades = allTrades.filter(t =>
+      const sysTrades = applyPeriodFilter(allTrades.filter(t =>
         selectedInstruments.has(t.instrument) && (t.system || '') === sys
-      );
+      ));
       if (!sysTrades.length) return;
       const s = computeTierStats(sysTrades);
       rows += `
@@ -3164,12 +3451,12 @@ function renderWinProbMatrix() {
 
   // Instrument rows (filtered by active strategies)
   instruments.forEach(ins => {
-    const insTrades = allTrades.filter(t =>
+    const insTrades = applyPeriodFilter(allTrades.filter(t =>
       t.instrument === ins && (
         noStrategies ? false
         : selectedStrategies.size === 0 || selectedStrategies.has(t.system || '')
       )
-    );
+    ));
     if (!insTrades.length) return;
     const s = computeTierStats(insTrades);
     rows += `
