@@ -576,10 +576,98 @@ input::placeholder{color:var(--text-dim);}
   margin-left:auto;
 }
 .log-filter-reset:hover{background:rgba(239,68,68,0.1);}
+
+/* ═══ Multi-Select Instrument Dropdown ═══ */
+.instr-multi-dropdown{position:relative;display:inline-block;}
+.instr-multi-btn{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:6px 10px;
+  border-radius:7px;
+  font-family:'Space Mono',monospace;
+  font-size:11px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:32px;
+  min-width:140px;
+  transition:border-color 0.2s;
+}
+.instr-multi-btn:hover{border-color:var(--accent);}
+.instr-multi-btn.active{border-color:var(--accent);}
+.instr-multi-menu{
+  position:absolute;
+  top:calc(100% + 4px);
+  left:0;
+  min-width:180px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:6px;
+  z-index:50;
+  display:none;
+  box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  max-height:240px;
+  overflow-y:auto;
+}
+.instr-multi-menu.open{display:block;}
+.instr-multi-option{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 8px;
+  border-radius:5px;
+  cursor:pointer;
+  font-family:'Space Mono',monospace;
+  font-size:11px;
+  color:var(--text);
+  transition:background 0.15s;
+  user-select:none;
+}
+.instr-multi-option:hover{background:var(--surface2);}
+.instr-multi-option.disabled{opacity:0.35;pointer-events:none;}
+.instr-multi-option input[type="checkbox"]{
+  appearance:none;
+  -webkit-appearance:none;
+  width:14px;height:14px;
+  border:1px solid var(--text-dim);
+  border-radius:3px;
+  background:transparent;
+  cursor:pointer;
+  display:grid;
+  place-content:center;
+  margin:0;
+  flex-shrink:0;
+}
+.instr-multi-option input[type="checkbox"]:checked{
+  background:var(--accent);
+  border-color:var(--accent);
+}
+.instr-multi-option input[type="checkbox"]::before{
+  content:'';
+  width:8px;height:8px;
+  transform:scale(0);
+  transition:120ms transform ease-in-out;
+  box-shadow:inset 1em 1em #000;
+  transform-origin:center;
+  clip-path:polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+.instr-multi-option input[type="checkbox"]:checked::before{transform:scale(1);}
+.instr-multi-hint{
+  font-size:9px;
+  color:var(--text-dim);
+  font-family:'Space Mono',monospace;
+  padding:4px 8px;
+  border-top:1px solid var(--border);
+  margin-top:4px;
+}
 @media(max-width:768px){
   .log-filter-bar{padding:8px 12px;}
-  .log-filter-select,.log-filter-date{font-size:10px;flex:1 1 auto;min-width:90px;}
+  .log-filter-select,.log-filter-date,.instr-multi-btn{font-size:10px;flex:1 1 auto;min-width:90px;}
   .log-filter-reset{margin-left:0;flex:0 0 auto;}
+  .instr-multi-menu{min-width:160px;}
 }
 .log-table-wrap{overflow-x:auto;max-height:75vh;overflow-y:auto;}
 #logTable th{position:sticky;top:0;z-index:2;}
@@ -1858,9 +1946,24 @@ input::placeholder{color:var(--text-dim);}
         <select class="log-filter-select" id="logFilterStrategy" onchange="renderLogTable(document.querySelector('.log-search').value)">
           <option value="ALL">All Strategies</option>
         </select>
-        <select class="log-filter-select" id="logFilterInstrument" onchange="renderLogTable(document.querySelector('.log-search').value)">
-          <option value="ALL">All Instruments</option>
+        <select class="log-filter-select" id="logFilterRecovered" onchange="renderLogTable(document.querySelector('.log-search').value)">
+          <option value="ALL">All Outcomes</option>
+          <option value="Clean win">Clean Win (L1)</option>
+          <option value="L2 recovered">Recovered L2</option>
+          <option value="L3 recovered">Recovered L3</option>
+          <option value="L4 recovered">Recovered L4</option>
+          <option value="L5 recovered">Recovered L5</option>
+          <option value="Max loss">Max Loss</option>
         </select>
+        <!-- Multi-select instrument filter (max 2) -->
+        <div class="instr-multi-dropdown" id="instrMultiDropdown">
+          <button class="instr-multi-btn" id="instrMultiBtn" onclick="toggleInstrMenu(event)">
+            <span id="instrMultiLabel">All Instruments</span>
+            <span style="font-size:9px;color:var(--text-dim)">▼</span>
+          </button>
+          <div class="instr-multi-menu" id="instrMultiMenu"></div>
+        </div>
+        <input type="hidden" id="logFilterInstrument" value="ALL">
         <select class="log-filter-select" id="logFilterPeriod" onchange="onLogPeriodChange()">
           <option value="ALL">All Time</option>
           <option value="7">Last 7 days</option>
@@ -1873,9 +1976,16 @@ input::placeholder{color:var(--text-dim);}
         <input type="date" class="log-filter-date" id="logFilterTo" style="display:none" onchange="renderLogTable(document.querySelector('.log-search').value)">
         <button class="log-filter-reset" id="logFilterReset" onclick="resetLogFilters()" title="Reset filters" style="display:none">✕ Reset</button>
       </div>
+      <!-- Bulk Copy Bar -->
+      <div id="bulkCopyBar" style="display:none;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);background:rgba(0,212,170,0.06);">
+        <span id="bulkCopyCount" style="font-size:11px;font-family:'Space Mono',monospace;font-weight:700;color:var(--accent);">0 selected</span>
+        <button onclick="openBulkCopyModal()" style="background:var(--accent);color:#000;border:none;padding:6px 14px;border-radius:6px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">📋 Copy Selected to Strategy</button>
+        <button onclick="clearSelection()" style="background:none;border:1px solid var(--border);color:var(--text-dim);padding:6px 12px;border-radius:6px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;margin-left:auto;">Clear Selection</button>
+      </div>
       <div class="log-table-wrap">
         <table id="logTable">
           <thead><tr>
+            <th style="width:32px;text-align:center"><input type="checkbox" id="selectAllTrades" onchange="toggleSelectAll(this)" style="cursor:pointer;width:16px;height:16px;" title="Select all visible"></th>
             <th>#</th><th>Date</th><th>Instrument</th><th>System</th>
             <th>L1</th><th>L2</th><th>L3</th><th>L4</th><th>L5</th>
             <th>Net Pips</th><th>Outcome</th><th>Notes</th><th></th>
@@ -2014,6 +2124,33 @@ input::placeholder{color:var(--text-dim);}
     <div class="del-modal-actions">
       <button class="btn-del-confirm" onclick="confirmDelete()">Delete</button>
       <button class="btn-del-cancel" onclick="cancelDelete()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- COPY TRADE MODAL -->
+<div class="modal-overlay" id="copyTradeModal">
+  <div class="modal" style="max-width:420px;">
+    <h3>📋 Copy Trade to Another Strategy</h3>
+    <div class="sb-notice" style="margin-bottom:14px;">
+      <strong>Copying:</strong> <span id="copySourceDesc" style="color:var(--accent)">—</span><br>
+      <span style="font-size:9px;">Tier results, pips, and notes will be copied. Date and instrument stay the same.</span>
+    </div>
+    <input type="hidden" id="copyTradeId">
+    <div class="form-group" style="margin-bottom:14px;">
+      <label style="font-size:10px;color:var(--text-dim);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:0.8px;">Target Strategy</label>
+      <select id="copyTargetStrategy" style="width:100%;margin-top:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:7px;font-family:'Space Mono',monospace;font-size:12px;">
+        <!-- populated by JS -->
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label style="font-size:10px;color:var(--text-dim);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:0.8px;">New Date (optional)</label>
+      <input type="date" id="copyNewDate" style="width:100%;margin-top:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:7px;font-family:'Space Mono',monospace;font-size:12px;">
+      <div style="font-size:9px;color:var(--text-dim);font-family:'Space Mono',monospace;margin-top:4px;">Leave blank to use the original trade date</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-save" onclick="executeCopy()">Copy Trade</button>
+      <button class="btn-modal-cancel" onclick="closeCopyModal()">Cancel</button>
     </div>
   </div>
 </div>
@@ -2833,26 +2970,113 @@ function wlBadge(v) {
   return `<span class="wl-badge wl-${v}">${v}</span>`;
 }
 
+// Track selected instruments for the log filter (max 2)
+let selectedLogInstruments = new Set();
+let logInstrumentsBuilt = false;
+
+// Track selected trade IDs for bulk operations
+let selectedTradeIds = {};
+
 function populateLogFilterDropdowns() {
   const stratSel = document.getElementById('logFilterStrategy');
-  const insSel = document.getElementById('logFilterInstrument');
-  if (!stratSel || !insSel) return;
+  if (!stratSel) return;
 
   const strategies = [...new Set(allTrades.map(t => t.system).filter(Boolean))].sort();
-  const instruments = getAllInstruments();
-
   const curStrat = stratSel.value || 'ALL';
-  const curIns = insSel.value || 'ALL';
-
   stratSel.innerHTML = '<option value="ALL">All Strategies</option>' +
     strategies.map(s => `<option value="${s}">${s}</option>`).join('');
-  insSel.innerHTML = '<option value="ALL">All Instruments</option>' +
-    instruments.map(i => `<option value="${i}">${i.toUpperCase()}</option>`).join('');
-
-  // Preserve selection if the value still exists in the rebuilt list
   if (strategies.includes(curStrat)) stratSel.value = curStrat;
-  if (instruments.includes(curIns)) insSel.value = curIns;
+
+  // Build multi-select instrument menu
+  buildInstrMultiMenu();
 }
+
+function buildInstrMultiMenu() {
+  const menu = document.getElementById('instrMultiMenu');
+  const btn = document.getElementById('instrMultiBtn');
+  const label = document.getElementById('instrMultiLabel');
+  if (!menu) return;
+
+  const instruments = getAllInstruments();
+
+  // First-time init: default to "ALL"
+  if (!logInstrumentsBuilt) {
+    logInstrumentsBuilt = true;
+    selectedLogInstruments.clear();
+  }
+
+  // Update label
+  if (selectedLogInstruments.size === 0) {
+    label.textContent = 'All Instruments';
+    btn.classList.remove('active');
+  } else if (selectedLogInstruments.size === 1) {
+    const ins = [...selectedLogInstruments][0];
+    label.textContent = ins.toUpperCase();
+    btn.classList.add('active');
+  } else {
+    const insList = [...selectedLogInstruments].map(i => i.toUpperCase()).join(', ');
+    label.textContent = insList;
+    btn.classList.add('active');
+  }
+
+  // Build options
+  const maxReached = selectedLogInstruments.size >= 2;
+  let html = '';
+
+  // "All Instruments" option
+  const allChecked = selectedLogInstruments.size === 0 ? 'checked' : '';
+  html += `<label class="instr-multi-option" onclick="toggleLogInstrument('ALL')">
+    <input type="checkbox" ${allChecked} onclick="event.stopPropagation();toggleLogInstrument('ALL')">
+    <span>All Instruments</span>
+  </label>`;
+
+  instruments.forEach(ins => {
+    const checked = selectedLogInstruments.has(ins) ? 'checked' : '';
+    const disabled = maxReached && !selectedLogInstruments.has(ins) ? 'disabled' : '';
+    const cls = disabled ? ' instr-multi-option disabled' : '';
+    html += `<label class="instr-multi-option${cls}" onclick="${disabled ? '' : `toggleLogInstrument('${ins}')`}">
+      <input type="checkbox" ${checked} ${disabled} onclick="event.stopPropagation();${disabled ? '' : `toggleLogInstrument('${ins}')`}">
+      <span>${ins.toUpperCase()}</span>
+    </label>`;
+  });
+
+  if (maxReached) {
+    html += `<div class="instr-multi-hint">Max 2 instruments selected</div>`;
+  } else {
+    html += `<div class="instr-multi-hint">Select up to 2 instruments</div>`;
+  }
+
+  menu.innerHTML = html;
+}
+
+function toggleLogInstrument(ins) {
+  if (ins === 'ALL') {
+    selectedLogInstruments.clear();
+  } else {
+    if (selectedLogInstruments.has(ins)) {
+      selectedLogInstruments.delete(ins);
+    } else if (selectedLogInstruments.size < 2) {
+      selectedLogInstruments.add(ins);
+    }
+  }
+  buildInstrMultiMenu();
+  renderLogTable(document.querySelector('.log-search').value);
+}
+
+function toggleInstrMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('instrMultiMenu');
+  if (menu) menu.classList.toggle('open');
+}
+
+// Close instrument dropdown when clicking outside
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('instrMultiDropdown');
+  const menu = document.getElementById('instrMultiMenu');
+  if (menu && menu.classList.contains('open') && dropdown && !dropdown.contains(e.target)) {
+    menu.classList.remove('open');
+  }
+});
 
 function onLogPeriodChange() {
   const period = document.getElementById('logFilterPeriod').value;
@@ -2868,7 +3092,9 @@ function onLogPeriodChange() {
 
 function resetLogFilters() {
   document.getElementById('logFilterStrategy').value = 'ALL';
-  document.getElementById('logFilterInstrument').value = 'ALL';
+  document.getElementById('logFilterRecovered').value = 'ALL';
+  selectedLogInstruments.clear();
+  buildInstrMultiMenu();
   document.getElementById('logFilterPeriod').value = 'ALL';
   document.getElementById('logFilterFrom').value = '';
   document.getElementById('logFilterTo').value = '';
@@ -2876,6 +3102,10 @@ function resetLogFilters() {
   document.getElementById('logFilterTo').style.display = 'none';
   document.getElementById('logFilterToLabel').style.display = 'none';
   document.querySelector('.log-search').value = '';
+  // Clear all trade selections
+  selectedTradeIds = {};
+  const selectAll = document.getElementById('selectAllTrades');
+  if (selectAll) selectAll.checked = false;
   renderLogTable('');
 }
 
@@ -2903,10 +3133,11 @@ function renderLogTable(search) {
 
   const q = (search||'').toLowerCase();
   const stratFilter = document.getElementById('logFilterStrategy')?.value || 'ALL';
-  const insFilter = document.getElementById('logFilterInstrument')?.value || 'ALL';
+  const recoveredFilter = document.getElementById('logFilterRecovered')?.value || 'ALL';
   const { from, to } = logFilterDateRange();
 
-  const anyFilterActive = stratFilter !== 'ALL' || insFilter !== 'ALL' ||
+  const anyFilterActive = stratFilter !== 'ALL' || selectedLogInstruments.size > 0 ||
+    recoveredFilter !== 'ALL' ||
     (document.getElementById('logFilterPeriod')?.value || 'ALL') !== 'ALL' || q;
   const resetBtn = document.getElementById('logFilterReset');
   if (resetBtn) resetBtn.style.display = anyFilterActive ? '' : 'none';
@@ -2917,7 +3148,8 @@ function renderLogTable(search) {
     if (!matchesSearch) return false;
 
     if (stratFilter !== 'ALL' && (t.system || '') !== stratFilter) return false;
-    if (insFilter !== 'ALL' && t.instrument !== insFilter) return false;
+    if (selectedLogInstruments.size > 0 && !selectedLogInstruments.has(t.instrument)) return false;
+    if (recoveredFilter !== 'ALL' && (t.outcome || '') !== recoveredFilter) return false;
 
     if (from || to) {
       if (!t.date) return false;
@@ -2939,10 +3171,23 @@ function renderLogTable(search) {
     return;
   }
   document.getElementById('logEmpty').style.display = 'none';
+
+  // Update bulk copy bar visibility
+  const bulkBar = document.getElementById('bulkCopyBar');
+  if (bulkBar) {
+    const selectedCount = Object.keys(selectedTradeIds).length;
+    bulkBar.style.display = selectedCount > 0 ? 'flex' : 'none';
+    const countEl = document.getElementById('bulkCopyCount');
+    if (countEl) countEl.textContent = selectedCount + ' selected';
+  }
+
   body.innerHTML = filtered.map((t,i) => {
     const isNew = sessionTrades.some(s => s._id === t._id);
-    const safeId = String(t._id||i).replace(/'/g,"\\'");
+    const safeId = String(t._id||i).replace(/'/g,"\'");
+    const tradeRealId = String(t._id || t.id || i);
+    const isChecked = selectedTradeIds[tradeRealId] ? 'checked' : '';
     return `<tr ${isNew?'style="background:rgba(0,212,170,0.04)"':''}>
+      <td style="text-align:center"><input type="checkbox" class="trade-checkbox" data-id="${tradeRealId}" ${isChecked} onchange="toggleTradeSelect('${safeId}', this.checked)" style="cursor:pointer;width:16px;height:16px;"></td>
       <td style="color:var(--text-dim)">${filtered.length-i}</td>
       <td>${t.date||'—'}</td>
       <td style="font-weight:700">${(t.instrument||'').toUpperCase()}</td>
@@ -2956,6 +3201,7 @@ function renderLogTable(search) {
       <td>${outcomeChip(t.outcome)}</td>
       <td style="color:var(--text-dim);font-size:11px">${t.notes||''}</td>
       <td style="white-space:nowrap">
+        <button class="btn-edit" onclick="openCopyModal('${safeId}')" title="Copy to another strategy">📋</button>
         <button class="btn-edit" onclick="openEditModal('${safeId}')" title="Edit">✏️</button>
         <button class="btn-del" onclick="handleDelete('${safeId}')" title="Delete">🗑</button>
       </td>
@@ -2987,6 +3233,328 @@ async function confirmDelete() {
 function cancelDelete() {
   pendingDeleteId = null;
   document.getElementById('delConfirmModal').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════
+//  COPY TRADE TO ANOTHER STRATEGY
+// ══════════════════════════════════════════════════════
+let pendingCopyId = null;
+
+// ══════════════════════════════════════════════════════
+//  TICKBOX / SELECT-ALL / BULK COPY
+// ══════════════════════════════════════════════════════
+function toggleTradeSelect(id, checked) {
+  if (checked) {
+    selectedTradeIds[id] = true;
+  } else {
+    delete selectedTradeIds[id];
+  }
+  // Update select-all checkbox
+  const checkboxes = document.querySelectorAll('.trade-checkbox');
+  const selectAll = document.getElementById('selectAllTrades');
+  if (selectAll && checkboxes.length > 0) {
+    const checkedCount = document.querySelectorAll('.trade-checkbox:checked').length;
+    selectAll.checked = checkedCount === checkboxes.length && checkboxes.length > 0;
+  }
+  renderLogTable(document.querySelector('.log-search')?.value || '');
+}
+
+function toggleSelectAll(checkbox) {
+  const checked = checkbox.checked;
+  const checkboxes = document.querySelectorAll('.trade-checkbox');
+  checkboxes.forEach(cb => {
+    const id = cb.getAttribute('data-id');
+    if (checked) {
+      selectedTradeIds[id] = true;
+    } else {
+      delete selectedTradeIds[id];
+    }
+  });
+  renderLogTable(document.querySelector('.log-search')?.value || '');
+}
+
+function clearSelection() {
+  selectedTradeIds = {};
+  const selectAll = document.getElementById('selectAllTrades');
+  if (selectAll) selectAll.checked = false;
+  renderLogTable(document.querySelector('.log-search')?.value || '');
+}
+
+// ══════════════════════════════════════════════════════
+//  SINGLE + BULK COPY
+// ══════════════════════════════════════════════════════
+function openCopyModal(id) {
+  const trade = allTrades.find(t => String(t._id) === String(id) || String(t.id) === String(id));
+  if (!trade) return;
+  pendingCopyId = id;
+
+  const desc = `${(trade.instrument||'').toUpperCase()} — ${trade.outcome || 'trade'} — ${trade.system || 'No strategy'}`;
+  const descEl = document.getElementById('copySourceDesc');
+  if (descEl) descEl.textContent = desc;
+
+  const sel = document.getElementById('copyTargetStrategy');
+  const strategies = getAllStrategies().filter(s => s.name !== trade.system);
+  if (sel) {
+    sel.innerHTML = '<option value="">Select target strategy…</option>' +
+      strategies.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+  }
+
+  const dateEl = document.getElementById('copyNewDate');
+  if (dateEl) {
+    dateEl.value = trade.date || '';
+    dateEl.parentElement.style.display = '';
+  }
+
+  document.getElementById('copyTradeModal').classList.add('open');
+  window._isBulkCopy = false;
+}
+
+function openBulkCopyModal() {
+  const ids = Object.keys(selectedTradeIds);
+  if (ids.length === 0) { showToast('⚠️ No trades selected', true); return; }
+
+  const sel = document.getElementById('copyTargetStrategy');
+  const strategies = getAllStrategies();
+  if (sel) {
+    sel.innerHTML = '<option value="">Select target strategy…</option>' +
+      strategies.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+  }
+
+  const descEl = document.getElementById('copySourceDesc');
+  if (descEl) descEl.textContent = `${ids.length} trade${ids.length > 1 ? 's' : ''} selected for bulk copy`;
+
+  const dateGroup = document.getElementById('copyNewDate')?.parentElement;
+  if (dateGroup) dateGroup.style.display = 'none';
+
+  document.getElementById('copyTradeModal').classList.add('open');
+  window._isBulkCopy = true;
+}
+
+function closeCopyModal() {
+  pendingCopyId = null;
+  window._isBulkCopy = false;
+  document.getElementById('copyTradeModal').classList.remove('open');
+}
+
+async function executeCopy() {
+  const targetStrategy = document.getElementById('copyTargetStrategy')?.value;
+  if (!targetStrategy) { showToast('⚠️ Select a target strategy', true); return; }
+
+  if (window._isBulkCopy) {
+    await executeBulkCopy(targetStrategy);
+    return;
+  }
+
+  if (!pendingCopyId) return;
+  const original = allTrades.find(t => String(t._id) === String(pendingCopyId) || String(t.id) === String(pendingCopyId));
+  if (!original) { closeCopyModal(); return; }
+
+  const newDate = document.getElementById('copyNewDate')?.value || original.date;
+
+  const copy = {
+    date: newDate,
+    instrument: original.instrument,
+    system: targetStrategy,
+    l1_wl: original.l1_wl, l1_pips: original.l1_pips,
+    l2_wl: original.l2_wl, l2_pips: original.l2_pips,
+    l3_wl: original.l3_wl, l3_pips: original.l3_pips,
+    l4_wl: original.l4_wl, l4_pips: original.l4_pips,
+    l5_wl: original.l5_wl, l5_pips: original.l5_pips,
+    net_pips: original.net_pips,
+    outcome: original.outcome,
+    notes: (original.notes || '') + (original.notes ? ' ' : '') + `[copied from ${original.system}]`,
+  };
+
+  try {
+    const saved = await saveTrade(copy);
+    if (!saved || typeof saved !== 'object') throw new Error('Invalid save response');
+    if (!saved._id) saved._id = saved.id || ('local_' + Date.now());
+    allTrades.unshift(saved);
+    sessionTrades.unshift(saved);
+    pushHistory('add', { ...saved });
+    refreshDropdowns();
+    renderLogTable(document.querySelector('.log-search')?.value || '');
+    if (document.getElementById('page-analytics').classList.contains('active')) renderAnalytics();
+    showToast(`✅ Copied to ${targetStrategy}`);
+    closeCopyModal();
+  } catch(e) {
+    showToast('❌ Error copying trade: ' + e.message, true);
+  }
+}
+
+async function executeBulkCopy(targetStrategy) {
+  const ids = Object.keys(selectedTradeIds);
+  if (ids.length === 0) { closeCopyModal(); return; }
+
+  let copied = 0;
+  let failed = 0;
+
+  for (const id of ids) {
+    const original = allTrades.find(t => String(t._id) === String(id) || String(t.id) === String(id));
+    if (!original) { failed++; continue; }
+
+    const copy = {
+      date: original.date,
+      instrument: original.instrument,
+      system: targetStrategy,
+      l1_wl: original.l1_wl, l1_pips: original.l1_pips,
+      l2_wl: original.l2_wl, l2_pips: original.l2_pips,
+      l3_wl: original.l3_wl, l3_pips: original.l3_pips,
+      l4_wl: original.l4_wl, l4_pips: original.l4_pips,
+      l5_wl: original.l5_wl, l5_pips: original.l5_pips,
+      net_pips: original.net_pips,
+      outcome: original.outcome,
+      notes: (original.notes || '') + (original.notes ? ' ' : '') + `[copied from ${original.system}]`,
+    };
+
+    try {
+      const saved = await saveTrade(copy);
+      if (!saved || typeof saved !== 'object') { failed++; continue; }
+      if (!saved._id) saved._id = saved.id || ('local_' + Date.now());
+      allTrades.unshift(saved);
+      sessionTrades.unshift(saved);
+      copied++;
+    } catch(e) { failed++; }
+  }
+
+  if (copied > 0) {
+    pushHistory('add', { _id: 'bulk_' + Date.now(), count: copied });
+    refreshDropdowns();
+    renderLogTable(document.querySelector('.log-search')?.value || '');
+    if (document.getElementById('page-analytics').classList.contains('active')) renderAnalytics();
+  }
+
+  selectedTradeIds = {};
+  const selectAll = document.getElementById('selectAllTrades');
+  if (selectAll) selectAll.checked = false;
+  closeCopyModal();
+  showToast(`✅ Copied ${copied} trade${copied>1?'s':''} to ${targetStrategy}${failed>0?' ('+failed+' failed)':''}`);
+}
+
+// ══════════════════════════════════════════════════════
+//  EDIT TRADE MODAL
+// ══════════════════════════════════════════════════════
+let pendingEditId = null;
+let editTierState = { L1:null, L2:null, L3:null, L4:null, L5:null };
+
+function openEditModal(id) {
+  const trade = allTrades.find(t => String(t._id) === String(id) || String(t.id) === String(id));
+  if (!trade) { showToast('⚠️ Trade not found', true); return; }
+
+  pendingEditId = id;
+
+  document.getElementById('edit_id').value = id;
+  document.getElementById('edit_date').value = trade.date || '';
+  document.getElementById('edit_instrument').value = trade.instrument || 'eurusd';
+  populateEditStrategyDropdown(trade.system || '');
+  document.getElementById('edit_system').value = trade.system || '';
+  document.getElementById('edit_net_pips').value = trade.net_pips != null ? trade.net_pips : '';
+  document.getElementById('edit_notes').value = trade.notes || '';
+
+  editTierState = {
+    L1: trade.l1_wl || null,
+    L2: trade.l2_wl || null,
+    L3: trade.l3_wl || null,
+    L4: trade.l4_wl || null,
+    L5: trade.l5_wl || null,
+  };
+
+  renderEditTierGrid(trade);
+  document.getElementById('editTradeModal').classList.add('open');
+}
+
+function closeEditModal() {
+  pendingEditId = null;
+  document.getElementById('editTradeModal').classList.remove('open');
+}
+
+function renderEditTierGrid(trade) {
+  const tiers = ['L1','L2','L3','L4','L5'];
+  const colors = ['var(--win)','var(--l2)','var(--l3)','var(--l4)','var(--l5)'];
+  const bgs = ['rgba(16,185,129,0.15)','rgba(59,130,246,0.15)','rgba(139,92,246,0.15)','rgba(236,72,153,0.15)','rgba(249,115,22,0.15)'];
+
+  document.getElementById('editTierGrid').innerHTML = tiers.map((tier, i) => {
+    const val = editTierState[tier];
+    const isLocked = i > 0 && editTierState[tiers[i-1]] !== 'L';
+    const wActive = val === 'W' ? 'active-W' : '';
+    const lActive = val === 'L' ? 'active-L' : '';
+    const pipsVal = trade && trade['l'+(i+1)+'_pips'] != null ? trade['l'+(i+1)+'_pips'] : '';
+    return `
+      <div class="edit-tier-col">
+        <span style="font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;background:${bgs[i]};color:${colors[i]};font-family:Space Mono,monospace;min-width:32px;text-align:center;">${tier}</span>
+        <div class="edit-tier-wl">
+          <button class="edit-toggle ${wActive}" onclick="setEditTier('${tier}','W')" ${isLocked?'disabled style="opacity:0.3;cursor:not-allowed;"':''}>W</button>
+          <button class="edit-toggle ${lActive}" onclick="setEditTier('${tier}','L')" ${isLocked?'disabled style="opacity:0.3;cursor:not-allowed;"':''}>L</button>
+          ${i>0?`<button class="edit-toggle ${val===null&&!isLocked?'active-skip':''}" onclick="setEditTier('${tier}',null)" ${isLocked?'disabled style="opacity:0.3;cursor:not-allowed;"':''}>—</button>`:''}
+        </div>
+        <input type="number" id="editPips_${tier}" value="${pipsVal}" placeholder="Pips" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:5px;font-family:'Space Mono',monospace;font-size:10px;text-align:center;" ${isLocked?'disabled':''}>
+      </div>
+    `;
+  }).join('');
+}
+
+function setEditTier(tier, value) {
+  editTierState[tier] = value;
+  const tiers = ['L1','L2','L3','L4','L5'];
+  const idx = tiers.indexOf(tier);
+  // Lock/unlock downstream tiers
+  if (value !== 'L') {
+    for (let i = idx + 1; i < tiers.length; i++) {
+      editTierState[tiers[i]] = null;
+    }
+  }
+  // Re-render with the current trade's pips data
+  const trade = allTrades.find(t => String(t._id) === String(pendingEditId) || String(t.id) === String(pendingEditId));
+  renderEditTierGrid(trade);
+}
+
+async function saveEditedTrade() {
+  if (!pendingEditId) return;
+
+  const trade = allTrades.find(t => String(t._id) === String(pendingEditId) || String(t.id) === String(pendingEditId));
+  if (!trade) { closeEditModal(); return; }
+
+  const getEditPips = (t) => {
+    const el = document.getElementById('editPips_' + t);
+    return el && el.value !== '' ? parseFloat(el.value) : null;
+  };
+
+  const updated = {
+    ...trade,
+    date: document.getElementById('edit_date').value,
+    instrument: document.getElementById('edit_instrument').value,
+    system: document.getElementById('edit_system').value,
+    net_pips: document.getElementById('edit_net_pips').value !== '' ? parseFloat(document.getElementById('edit_net_pips').value) : null,
+    notes: document.getElementById('edit_notes').value.trim(),
+    l1_wl: editTierState.L1, l1_pips: getEditPips('L1'),
+    l2_wl: editTierState.L2, l2_pips: getEditPips('L2'),
+    l3_wl: editTierState.L3, l3_pips: getEditPips('L3'),
+    l4_wl: editTierState.L4, l4_pips: getEditPips('L4'),
+    l5_wl: editTierState.L5, l5_pips: getEditPips('L5'),
+  };
+  updated.outcome = deriveOutcome(updated);
+
+  const _prev = { ...trade };
+
+  try {
+    const realId = trade.id || trade._id;
+    await updateTrade(realId, updated);
+
+    const idx = allTrades.findIndex(t => String(t._id) === String(pendingEditId) || String(t.id) === String(pendingEditId));
+    if (idx !== -1) {
+      allTrades[idx] = { ...updated, _id: allTrades[idx]._id, id: allTrades[idx].id };
+    }
+
+    pushHistory('edit', { ...updated, _id: pendingEditId, _prev });
+    refreshDropdowns();
+    renderLogTable(document.querySelector('.log-search')?.value || '');
+    if (document.getElementById('page-analytics').classList.contains('active')) renderAnalytics();
+    if (document.getElementById('page-strategies').classList.contains('active')) renderStrategies();
+    showToast(`✅ Trade updated — ${updated.instrument.toUpperCase()} ${updated.outcome}`);
+    closeEditModal();
+  } catch(e) {
+    showToast('❌ Error updating trade: ' + e.message, true);
+  }
 }
 
 // ══════════════════════════════════════════════════════
