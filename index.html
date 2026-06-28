@@ -1980,6 +1980,7 @@ input::placeholder{color:var(--text-dim);}
       <div id="bulkCopyBar" style="display:none;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);background:rgba(0,212,170,0.06);">
         <span id="bulkCopyCount" style="font-size:11px;font-family:'Space Mono',monospace;font-weight:700;color:var(--accent);">0 selected</span>
         <button onclick="openBulkCopyModal()" style="background:var(--accent);color:#000;border:none;padding:6px 14px;border-radius:6px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">📋 Copy Selected to Strategy</button>
+        <button onclick="deleteSelectedTrades()" style="background:var(--loss);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">🗑 Delete Selected</button>
         <button onclick="clearSelection()" style="background:none;border:1px solid var(--border);color:var(--text-dim);padding:6px 12px;border-radius:6px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;margin-left:auto;">Clear Selection</button>
       </div>
       <div class="log-table-wrap">
@@ -2214,6 +2215,7 @@ const tierState = { L1:null, L2:null, L3:null, L4:null, L5:null };
 let historyStack = [];
 let historyIndex = -1;
 let pendingDeleteId = null;
+let pendingBulkDeleteIds = null;
 const MAX_HISTORY = 50;
 
 function pushHistory(action, data) {
@@ -2262,7 +2264,7 @@ function renderHistory() {
   }).join('');
 }
 
-function performUndo() {
+async function performUndo() {
   if (historyIndex < 0) return;
   const h = historyStack[historyIndex];
   if (h.action === 'add') {
@@ -2270,13 +2272,21 @@ function performUndo() {
     const trade = allTrades.find(t => String(t._id) === String(h.data._id) || String(t.id) === String(h.data._id));
     if (trade) {
       const realId = trade.id || trade._id;
-      deleteTrade(realId);
+      try { await deleteTrade(realId); } catch(e) {}
     }
   } else if (h.action === 'del') {
     // Undo delete = re-add the trade
-    allTrades.unshift({ ...h.data });
-    if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-      saveTrade(h.data).catch(() => {});
+    try {
+      const saved = await saveTrade(h.data);
+      if (saved) {
+        h.data.id = saved.id || h.data.id;
+        h.data._id = saved._id || saved.id || h.data._id;
+        allTrades.unshift({ ...h.data, id: h.data.id, _id: h.data._id });
+      } else {
+        allTrades.unshift({ ...h.data });
+      }
+    } catch(e) {
+      allTrades.unshift({ ...h.data });
     }
   } else if (h.action === 'edit') {
     // Undo edit = restore previous version
@@ -2284,7 +2294,7 @@ function performUndo() {
     if (idx !== -1 && h.data._prev) {
       allTrades[idx] = { ...h.data._prev };
       const realId = allTrades[idx].id || allTrades[idx]._id;
-      updateTrade(realId, allTrades[idx]).catch(() => {});
+      try { await updateTrade(realId, allTrades[idx]); } catch(e) {}
     }
   }
   historyIndex--;
@@ -2296,27 +2306,35 @@ function performUndo() {
   showToast('↩️ Undone');
 }
 
-function performRedo() {
+async function performRedo() {
   if (historyIndex >= historyStack.length - 1) return;
   historyIndex++;
   const h = historyStack[historyIndex];
   if (h.action === 'add') {
-    allTrades.unshift({ ...h.data });
-    if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-      saveTrade(h.data).catch(() => {});
+    try {
+      const saved = await saveTrade(h.data);
+      if (saved) {
+        h.data.id = saved.id || h.data.id;
+        h.data._id = saved._id || saved.id || h.data._id;
+        allTrades.unshift({ ...h.data, id: h.data.id, _id: h.data._id });
+      } else {
+        allTrades.unshift({ ...h.data });
+      }
+    } catch(e) {
+      allTrades.unshift({ ...h.data });
     }
   } else if (h.action === 'del') {
     const trade = allTrades.find(t => String(t._id) === String(h.data._id) || String(t.id) === String(h.data._id));
     if (trade) {
       const realId = trade.id || trade._id;
-      deleteTrade(realId);
+      try { await deleteTrade(realId); } catch(e) {}
     }
   } else if (h.action === 'edit') {
     const idx = allTrades.findIndex(t => String(t._id) === String(h.data._id) || String(t.id) === String(h.data._id));
     if (idx !== -1) {
       allTrades[idx] = { ...h.data };
       const realId = allTrades[idx].id || allTrades[idx]._id;
-      updateTrade(realId, allTrades[idx]).catch(() => {});
+      try { await updateTrade(realId, allTrades[idx]); } catch(e) {}
     }
   }
   refreshDropdowns();
@@ -2553,10 +2571,12 @@ async function loadTrades() {
 
 async function saveTrade(trade) {
   if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+    // Strip internal fields before sending to Supabase — _id isn't a real column
+    const { _id, created_at, ...payload } = trade;
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}`, {
       method: 'POST',
       headers: { ...SB_HEADERS, Prefer: 'return=representation' },
-      body: JSON.stringify(trade)
+      body: JSON.stringify(payload)
     });
     if (!res.ok) { const err = await res.text(); throw new Error(`Save failed (${res.status}): ${err.slice(0,200)}`); }
     const data = await res.json();
@@ -2573,10 +2593,12 @@ async function saveTrade(trade) {
 
 async function updateTrade(id, trade) {
   if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL' && !String(id).startsWith('local_') && !String(id).startsWith('emb_')) {
+    // Strip internal fields before sending to Supabase — _id and id aren't updatable columns
+    const { _id, id: _id2, created_at, ...payload } = trade;
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...SB_HEADERS, Prefer: 'return=representation' },
-      body: JSON.stringify(trade)
+      body: JSON.stringify(payload)
     });
     if (!res.ok) { const err = await res.text(); throw new Error(`Update failed (${res.status}): ${err.slice(0,200)}`); }
     const data = await res.json();
@@ -3211,10 +3233,36 @@ function renderLogTable(search) {
 
 async function handleDelete(id) {
   pendingDeleteId = id;
-  document.getElementById('delConfirmModal').classList.add('open');
+  pendingBulkDeleteIds = null;
+  const modal = document.getElementById('delConfirmModal');
+  modal.querySelector('h3').textContent = '🗑 Delete Trade?';
+  modal.querySelector('p').textContent = 'This action will permanently remove the trade from your database. This cannot be undone (unless you use the History tab).';
+  modal.classList.add('open');
 }
 
 async function confirmDelete() {
+  if (pendingBulkDeleteIds) {
+    let deleted = 0;
+    for (const id of pendingBulkDeleteIds) {
+      const trade = allTrades.find(t => String(t._id) === String(id) || String(t.id) === String(id));
+      if (trade) {
+        pushHistory('del', { ...trade });
+      }
+      const realId = trade ? (trade.id || trade._id) : id;
+      await deleteTrade(realId);
+      deleted++;
+    }
+    pendingBulkDeleteIds = null;
+    document.getElementById('delConfirmModal').classList.remove('open');
+    selectedTradeIds = {};
+    const selectAll = document.getElementById('selectAllTrades');
+    if (selectAll) selectAll.checked = false;
+    renderLogTable(document.querySelector('.log-search').value);
+    if (document.getElementById('page-analytics').classList.contains('active')) renderAnalytics();
+    showToast(`🗑 ${deleted} trade${deleted > 1 ? 's' : ''} deleted`);
+    return;
+  }
+
   if (!pendingDeleteId) return;
   const trade = allTrades.find(t => String(t._id) === String(pendingDeleteId) || String(t.id) === String(pendingDeleteId));
   if (trade) {
@@ -3232,6 +3280,7 @@ async function confirmDelete() {
 
 function cancelDelete() {
   pendingDeleteId = null;
+  pendingBulkDeleteIds = null;
   document.getElementById('delConfirmModal').classList.remove('open');
 }
 
@@ -3278,6 +3327,18 @@ function clearSelection() {
   const selectAll = document.getElementById('selectAllTrades');
   if (selectAll) selectAll.checked = false;
   renderLogTable(document.querySelector('.log-search')?.value || '');
+}
+
+function deleteSelectedTrades() {
+  const ids = Object.keys(selectedTradeIds);
+  if (ids.length === 0) { showToast('⚠️ No trades selected', true); return; }
+
+  pendingBulkDeleteIds = ids;
+  pendingDeleteId = null;
+  const modal = document.getElementById('delConfirmModal');
+  modal.querySelector('h3').textContent = `🗑 Delete ${ids.length} Trade${ids.length > 1 ? 's' : ''}?`;
+  modal.querySelector('p').textContent = `This will permanently remove ${ids.length} selected trade${ids.length > 1 ? 's' : ''} from your database. This cannot be undone (unless you use the History tab).`;
+  modal.classList.add('open');
 }
 
 // ══════════════════════════════════════════════════════
@@ -4292,6 +4353,7 @@ function renderStrategies() {
     const rec = st ? (st.recovery*100).toFixed(1)+'%' : '—';
     const total = st ? st.total : 0;
     const l1Color = st && st.l1wr>=0.7?'var(--win)':st && st.l1wr>=0.5?'var(--warn)':'var(--loss)';
+    const isCustom = !BUILTIN_STRATEGIES.find(bs => bs.name === s.name);
     return `<div class="strategy-card ${cls}">
       <div class="strategy-card-header">
         <div class="strategy-icon ${cls}">${icon}</div>
@@ -4299,6 +4361,7 @@ function renderStrategies() {
           <div class="strategy-tag">${s.type}</div>
           <h3>${s.name}</h3>
         </div>
+        ${isCustom ? `<button class="btn-del" onclick="handleDeleteStrategy('${s.name.replace(/'/g,"\\'")}')" title="Delete strategy" style="margin-left:auto;">🗑</button>` : ''}
       </div>
       <div class="strategy-stats">
         <div class="sstat"><div class="sstat-label">Trades</div><div class="sstat-val">${total}</div></div>
@@ -4366,6 +4429,19 @@ function saveNewStrategy() {
   closeStrategyModal();
   renderStrategies();
   showToast(`✅ Strategy "${name}" added`);
+}
+
+function handleDeleteStrategy(name) {
+  if (!confirm(`Delete strategy "${name}"? This will not delete any trades using this strategy.`)) return;
+  deleteStrategy(name);
+}
+
+function deleteStrategy(name) {
+  customStrategies = customStrategies.filter(s => s.name !== name);
+  localStorage.setItem('customStrategies', JSON.stringify(customStrategies));
+  refreshStrategyDropdown();
+  renderStrategies();
+  showToast(`🗑 Strategy "${name}" deleted`);
 }
 
 // Edit strategy dropdown helper
