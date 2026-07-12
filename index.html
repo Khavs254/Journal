@@ -1681,6 +1681,9 @@ input::placeholder{color:var(--text-dim);}
     <div class="nav-tab" data-tab="history" onclick="switchTab('history')">
       <span class="tab-icon">🕐</span> History
     </div>
+    <div class="nav-tab" data-tab="import" onclick="switchTab('import')">
+      <span>📥</span> Import
+    </div>
   </nav>
   <div class="header-right">
     <span id="syncBadge">📦 Local</span>
@@ -2032,6 +2035,29 @@ input::placeholder{color:var(--text-dim);}
 </div>
 
 <!-- ═══════════════ HISTORY / UNDO-REDO PAGE ═══════════════ -->
+<div class="page" id="page-import">
+  <div class="card" style="max-width:760px;margin:0 auto;">
+    <h2 style="margin-bottom:4px;">📥 Import Backtest Results</h2>
+    <p style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">
+      Upload a JForex Historical Tester HTML report. Tier orders (T1…Tn labels) are grouped into
+      martingale sequences and imported as journal trades. Two strategies are created automatically —
+      <strong>&lt;Name&gt; Continuation</strong> and <strong>&lt;Name&gt; Reversal</strong> — and each
+      sequence is filed under the one matching its setup origin.
+    </p>
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Strategy base name</label>
+    <input id="importBaseName" type="text" placeholder="e.g. RopaWaveV10" style="width:100%;background:var(--surface2,#181c24);border:1px solid var(--border,#1e2330);border-radius:6px;padding:8px;color:var(--text,#e2e8f0);font-size:13px;margin-bottom:12px;">
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">JForex report (.html)</label>
+    <input id="importFile" type="file" accept=".html,.htm" style="width:100%;margin-bottom:12px;color:var(--text-dim);font-size:13px;">
+
+    <div id="importPreview" style="display:none;background:var(--surface2,#181c24);border-radius:8px;padding:14px;margin-bottom:12px;font-size:13px;"></div>
+
+    <button id="importRunBtn" class="btn btn-primary" style="display:none;width:100%;" onclick="runBacktestImport()">Import into journal</button>
+    <div id="importLog" style="display:none;background:#000;border-radius:8px;padding:10px;font-family:monospace;font-size:12px;max-height:220px;overflow-y:auto;margin-top:12px;white-space:pre-wrap;color:var(--text-dim);"></div>
+  </div>
+</div>
+
 <div class="page" id="page-history">
   <div class="history-page">
     <div class="history-header">
@@ -2367,6 +2393,7 @@ function switchTab(tab) {
   if (tab === 'entry') renderLogTable('');
   if (tab === 'strategies') renderStrategies();
   if (tab === 'history') updateHistoryUI();
+  if (tab === 'import') { /* static page, nothing to render */ }
 }
 
 
@@ -4505,5 +4532,203 @@ async function init() {
 init();
 
 </script>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  BACKTEST IMPORT (JForex HTML report -> journal trades)
+// ══════════════════════════════════════════════════════
+let _importParsed = null;
+
+const IMPORT_INSTRUMENT_MAP = {
+  'EUR/USD':'eurusd', 'GBP/USD':'gbpusd', 'USD/CAD':'usdcad',
+  'AUD/USD':'audusd', 'AUD/CAD':'audcad'
+};
+
+document.getElementById('importFile').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!document.getElementById('importBaseName').value.trim()) {
+    // suggest base name from filename: "RopaWaveV10_12072026_..." -> "RopaWaveV10"
+    const guess = file.name.split('_')[0].replace(/\.html?$/i,'');
+    document.getElementById('importBaseName').value = guess;
+  }
+  const reader = new FileReader();
+  reader.onload = () => parseBacktestReport(reader.result);
+  reader.readAsText(file);
+});
+
+function parseBacktestReport(html) {
+  // Map every position in the file to the instrument section it belongs to
+  const instRe = /Instrument\s*<[^>]*>\s*<TD[^>]*>\s*([A-Z]{3}\/[A-Z]{3})/gi;
+  const sections = [];
+  let m;
+  const plainRe = /(EUR\/USD|GBP\/USD|USD\/CAD|AUD\/USD|AUD\/CAD)/g;
+  // robust: find "Instrument" label positions, then nearest pair name after them
+  const labelRe = /Instrument/g;
+  while ((m = labelRe.exec(html)) !== null) {
+    plainRe.lastIndex = m.index;
+    const pm = plainRe.exec(html);
+    if (pm && pm.index - m.index < 300) sections.push({ pos: m.index, inst: pm[1] });
+  }
+  const instAt = pos => {
+    let cur = null;
+    for (const s of sections) { if (s.pos <= pos) cur = s.inst; else break; }
+    return cur || 'EUR/USD';
+  };
+
+  // Parse all tier-order rows with their file positions
+  const rowRe = /<TR>\s*([\s\S]*?)<\/TR>/g;
+  const orders = [];
+  while ((m = rowRe.exec(html)) !== null) {
+    const cells = [...m[1].matchAll(/<TD>([\s\S]*?)<\/TD>/g)].map(c => c[1].trim());
+    if (cells.length >= 9 && /^T\d+_(CON|REV)_/.test(cells[0])) {
+      orders.push({
+        tier: parseInt(cells[0].match(/^T(\d+)_/)[1]),
+        origin: cells[0].split('_')[1],
+        dir: cells[2],
+        plpips: parseFloat(cells[6]),
+        open: cells[7],
+        close: cells[8],
+        inst: instAt(m.index)
+      });
+    }
+  }
+
+  if (!orders.length) {
+    alert('No tier orders (T1_CON_/T1_REV_ labels) found in this file. Is it a JForex report from RopaWave?');
+    return;
+  }
+
+  // Group per instrument, chronologically, into sequences
+  const byInst = {};
+  orders.forEach(o => { (byInst[o.inst] = byInst[o.inst] || []).push(o); });
+
+  const sequences = [];
+  const maxTierSeen = Math.max(...orders.map(o => o.tier));
+  Object.keys(byInst).forEach(inst => {
+    const list = byInst[inst].sort((a,b) => a.open.localeCompare(b.open) || a.tier - b.tier);
+    let cur = [];
+    list.forEach(o => {
+      cur.push(o);
+      if (o.plpips > 0 || o.tier >= maxTierSeen) {
+        sequences.push({ inst, orders: cur });
+        cur = [];
+      }
+    });
+    if (cur.length) sequences.push({ inst, orders: cur });
+  });
+
+  const conCount = sequences.filter(s => s.orders[0].origin === 'CON').length;
+  const revCount = sequences.length - conCount;
+
+  _importParsed = { sequences, maxTierSeen };
+
+  const pv = document.getElementById('importPreview');
+  pv.style.display = 'block';
+  pv.innerHTML = `<strong>Parsed successfully</strong><br>
+    ${orders.length} tier orders &rarr; <strong>${sequences.length} sequences</strong><br>
+    Continuation: <strong>${conCount}</strong> &nbsp;|&nbsp; Reversal: <strong>${revCount}</strong><br>
+    Instruments: ${Object.keys(byInst).join(', ')}<br>
+    Date range: ${orders[0].open.slice(0,10)} &rarr; ${orders[orders.length-1].close.slice(0,10)}<br>
+    Deepest tier reached: T${maxTierSeen}`;
+  document.getElementById('importRunBtn').style.display = 'block';
+}
+
+function importLog(msg, color) {
+  const el = document.getElementById('importLog');
+  el.style.display = 'block';
+  const d = document.createElement('div');
+  if (color) d.style.color = color;
+  d.textContent = msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+async function runBacktestImport() {
+  if (!_importParsed) return;
+  const base = document.getElementById('importBaseName').value.trim();
+  if (!base) { alert('Enter a strategy base name first.'); return; }
+
+  const contName = base + ' Continuation';
+  const revName  = base + ' Reversal';
+
+  // duplicate guard
+  const existing = allTrades.filter(t => t.system === contName || t.system === revName).length;
+  if (existing > 0 && !confirm(existing + ' trades already exist under these strategy names. Import anyway (may duplicate)?')) return;
+
+  const btn = document.getElementById('importRunBtn');
+  btn.disabled = true;
+  document.getElementById('importLog').innerHTML = '';
+
+  // 1. register the two strategies (skip if already registered)
+  [['Continuation', contName], ['Reversal', revName]].forEach(([type, name]) => {
+    if (!getAllStrategies().find(s => s.name === name)) {
+      customStrategies.push({ name, type, desc: 'Imported from ' + base + ' backtest',
+        icon: type === 'Continuation' ? '➡️' : '🔄', cls: type === 'Continuation' ? 'cont' : 'rev' });
+      importLog('Registered strategy: ' + name, 'var(--win)');
+    } else {
+      importLog('Strategy already registered: ' + name);
+    }
+  });
+  localStorage.setItem('customStrategies', JSON.stringify(customStrategies));
+  refreshStrategyDropdown();
+
+  // 2. build journal rows
+  const rows = _importParsed.sequences.map(seq => {
+    const first = seq.orders[0];
+    const row = {
+      date: first.open.slice(0,10),
+      instrument: IMPORT_INSTRUMENT_MAP[seq.inst] || seq.inst.toLowerCase().replace('/',''),
+      system: first.origin === 'CON' ? contName : revName,
+      l1_wl:null,l1_pips:null,l2_wl:null,l2_pips:null,l3_wl:null,l3_pips:null,
+      l4_wl:null,l4_pips:null,l5_wl:null,l5_pips:null,
+      net_pips: Math.round(seq.orders.reduce((s,o)=>s+o.plpips,0)*10)/10,
+      notes: first.origin + ' | ' + first.dir + ' | ' + first.open + ' -> ' + seq.orders[seq.orders.length-1].close
+    };
+    let deepNote = '';
+    seq.orders.forEach(o => {
+      const wl = o.plpips > 0 ? 'W' : 'L';
+      if (o.tier <= 5) { row['l'+o.tier+'_wl'] = wl; row['l'+o.tier+'_pips'] = o.plpips; }
+      else deepNote += ' T'+o.tier+':'+wl+'('+o.plpips+'p)';
+    });
+    if (deepNote) row.notes += ' | beyond L5:' + deepNote;
+    // outcome, same convention as the entry form
+    const lastWin = seq.orders[seq.orders.length-1].plpips > 0;
+    if (!lastWin) row.outcome = 'Max loss';
+    else {
+      const winTier = Math.min(seq.orders[seq.orders.length-1].tier, 5);
+      row.outcome = winTier === 1 ? 'Clean win' : 'L' + winTier + ' recovered';
+    }
+    return row;
+  });
+
+  // 3. batch insert to Supabase
+  importLog('Inserting ' + rows.length + ' rows…');
+  const BATCH = 200;
+  let done = 0, failed = 0;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const chunk = rows.slice(i, i + BATCH);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}`, {
+        method: 'POST',
+        headers: { ...SB_HEADERS, Prefer: 'return=minimal' },
+        body: JSON.stringify(chunk)
+      });
+      if (!res.ok) { failed += chunk.length; importLog('Batch failed ('+res.status+'): '+(await res.text()).slice(0,150), 'var(--loss)'); }
+      else { done += chunk.length; importLog('Inserted ' + done + '/' + rows.length, 'var(--win)'); }
+    } catch (err) { failed += chunk.length; importLog('Batch error: ' + err.message, 'var(--loss)'); }
+  }
+
+  importLog('Done. ' + done + ' imported, ' + failed + ' failed.', failed ? 'var(--warn)' : 'var(--win)');
+  if (done > 0) {
+    importLog('Reloading journal data…');
+    await loadTrades();
+    renderStrategies();
+    importLog('Journal refreshed — check the Strategies tab.', 'var(--win)');
+  }
+  btn.disabled = false;
+}
+</script>
+
 </body>
 </html>
