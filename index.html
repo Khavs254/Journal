@@ -2425,6 +2425,31 @@ const SB_HEADERS = {
   'Content-Type': 'application/json'
 };
 
+// Supabase/PostgREST silently caps `select=*` at 1000 rows by default.
+// Once the journal (or an import) holds more rows than that, a plain
+// fetch only ever returns the newest page — older trades, and entire
+// instrument batches inserted earlier, quietly stop showing up even
+// though they're still in the table. This loops with Range headers
+// until a page comes back short, guaranteeing the full table.
+async function fetchAllTrades() {
+  const PAGE = 1000;
+  let from = 0;
+  let all = [];
+  while (true) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?select=*&order=created_at.desc`,
+      { headers: { ...SB_HEADERS, Range: `${from}-${from + PAGE - 1}` } }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const page = await res.json();
+    if (!Array.isArray(page)) throw new Error('Non-array response: ' + JSON.stringify(page).slice(0, 120));
+    all = all.concat(page);
+    if (page.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
 async function checkAndSetupTable() {
   // Ping the table — if 404 it doesn't exist
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?select=id&limit=1`, { headers: SB_HEADERS });
@@ -2553,10 +2578,7 @@ async function loadTrades() {
       const ok = await checkAndSetupTable();
       if (!ok) { return [...EMBEDDED_TRADES]; } // table missing, use local until setup
 
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?select=*&order=created_at.desc`, { headers: SB_HEADERS });
-      if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
-      const data = await res.json();
-      if (!Array.isArray(data)) { throw new Error('Non-array response: ' + JSON.stringify(data).slice(0,120)); }
+      const data = await fetchAllTrades();
 
       // One-time migration: push the embedded snapshot up ONLY the very
       // first time the table is empty. This must never re-trigger just
@@ -2697,10 +2719,7 @@ function refreshAfterRemoteChange() {
 async function refreshTradesFromServer() {
   if (!USE_SUPABASE || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?select=*&order=created_at.desc`, { headers: SB_HEADERS });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (!Array.isArray(data)) return;
+    const data = await fetchAllTrades();
     data.forEach(t => { if (!t._id) t._id = t.id; });
     allTrades = data;
     refreshAfterRemoteChange();
