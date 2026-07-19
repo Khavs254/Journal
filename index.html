@@ -1756,6 +1756,8 @@ input::placeholder{color:var(--text-dim);}
               <th>L3 Win%</th>
               <th>L4 Win%</th>
               <th>L5 Win%</th>
+              <th>L6 Win%</th>
+              <th>L7 Win%</th>
               <th>Overall Recovery</th>
             </tr>
           </thead>
@@ -1956,6 +1958,8 @@ input::placeholder{color:var(--text-dim);}
           <option value="L3 recovered">Recovered L3</option>
           <option value="L4 recovered">Recovered L4</option>
           <option value="L5 recovered">Recovered L5</option>
+          <option value="L6 recovered">Recovered L6</option>
+          <option value="L7 recovered">Recovered L7</option>
           <option value="Max loss">Max Loss</option>
         </select>
         <!-- Multi-select instrument filter (max 2) -->
@@ -1991,7 +1995,7 @@ input::placeholder{color:var(--text-dim);}
           <thead><tr>
             <th style="width:32px;text-align:center"><input type="checkbox" id="selectAllTrades" onchange="toggleSelectAll(this)" style="cursor:pointer;width:16px;height:16px;" title="Select all visible"></th>
             <th>#</th><th>Date</th><th>Instrument</th><th>System</th>
-            <th>L1</th><th>L2</th><th>L3</th><th>L4</th><th>L5</th>
+            <th>L1</th><th>L2</th><th>L3</th><th>L4</th><th>L5</th><th>L6</th><th>L7</th>
             <th>Net Pips</th><th>Outcome</th><th>Notes</th><th></th>
           </tr></thead>
           <tbody id="logBody"></tbody>
@@ -2481,6 +2485,8 @@ CREATE TABLE IF NOT EXISTS public.trades (
   l3_wl         text,  l3_pips numeric,
   l4_wl         text,  l4_pips numeric,
   l5_wl         text,  l5_pips numeric,
+  l6_wl         text,  l6_pips numeric,
+  l7_wl         text,  l7_pips numeric,
   net_pips      numeric,
   outcome       text,
   notes         text,
@@ -2488,6 +2494,12 @@ CREATE TABLE IF NOT EXISTS public.trades (
 );
 ALTER TABLE public.trades ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all" ON public.trades FOR ALL USING (true) WITH CHECK (true);
+
+-- If your table already exists WITHOUT tier 6/7 columns, run these once:
+ALTER TABLE public.trades ADD COLUMN IF NOT EXISTS l6_wl text;
+ALTER TABLE public.trades ADD COLUMN IF NOT EXISTS l6_pips numeric;
+ALTER TABLE public.trades ADD COLUMN IF NOT EXISTS l7_wl text;
+ALTER TABLE public.trades ADD COLUMN IF NOT EXISTS l7_pips numeric;
 
 -- Enables cross-device live sync (Realtime) for this table
 DO $$
@@ -2825,6 +2837,8 @@ function deriveOutcome(t) {
   if (t.l3_wl==='W') return 'L3 recovered';
   if (t.l4_wl==='W') return 'L4 recovered';
   if (t.l5_wl==='W') return 'L5 recovered';
+  if (t.l6_wl==='W') return 'L6 recovered';
+  if (t.l7_wl==='W') return 'L7 recovered';
   if (t.l1_wl==='L') return 'Max loss';
   return 'Max loss';
 }
@@ -2832,11 +2846,11 @@ function deriveOutcome(t) {
 // ══════════════════════════════════════════════════════
 //  TIER FORM
 // ══════════════════════════════════════════════════════
-const TIER_COLORS = { L1:'var(--win)', L2:'var(--l2)', L3:'var(--l3)', L4:'var(--l4)', L5:'var(--l5)' };
+const TIER_COLORS = { L1:'var(--win)', L2:'var(--l2)', L3:'var(--l3)', L4:'var(--l4)', L5:'var(--l5)', L6:'#e879f9', L7:'#f472b6' };
 const TIER_BG     = { L1:'rgba(16,185,129,0.15)', L2:'rgba(59,130,246,0.15)', L3:'rgba(139,92,246,0.15)', L4:'rgba(236,72,153,0.15)', L5:'rgba(249,115,22,0.15)' };
 
 function buildTierForm() {
-  const tiers = ['L1','L2','L3','L4','L5'];
+  const tiers = ['L1','L2','L3','L4','L5','L6','L7'];
   document.getElementById('tierGrid').innerHTML = tiers.map((tier,i) => `
     <div class="tier-row ${i>0?'locked':''}" id="tierRow_${tier}">
       <div class="tier-row-header">
@@ -2865,7 +2879,7 @@ function buildTierForm() {
 
 function setTier(tier, value) {
   tierState[tier] = value;
-  const tiers = ['L1','L2','L3','L4','L5'];
+  const tiers = ['L1','L2','L3','L4','L5','L6','L7'];
   const idx = tiers.indexOf(tier);
 
   // Update button styles
@@ -2916,7 +2930,7 @@ function updateOutcomePreview() {
 }
 
 function clearForm() {
-  ['L1','L2','L3','L4','L5'].forEach(t => {
+  ['L1','L2','L3','L4','L5','L6','L7'].forEach(t => {
     tierState[t] = null;
     ['W','L','skip'].forEach(v => {
       const b = document.getElementById(`btn_${t}_${v}`);
@@ -3088,7 +3102,7 @@ function buildInstrMultiMenu() {
   }
 
   // Build options
-  const maxReached = selectedLogInstruments.size >= 2;
+  const maxReached = false; // cap removed — select any number
   let html = '';
 
   // "All Instruments" option
@@ -3108,11 +3122,7 @@ function buildInstrMultiMenu() {
     </label>`;
   });
 
-  if (maxReached) {
-    html += `<div class="instr-multi-hint">Max 2 instruments selected</div>`;
-  } else {
-    html += `<div class="instr-multi-hint">Select up to 2 instruments</div>`;
-  }
+  html += `<div class="instr-multi-hint">Select any number of instruments</div>`;
 
   menu.innerHTML = html;
 }
@@ -3123,7 +3133,7 @@ function toggleLogInstrument(ins) {
   } else {
     if (selectedLogInstruments.has(ins)) {
       selectedLogInstruments.delete(ins);
-    } else if (selectedLogInstruments.size < 2) {
+    } else {
       selectedLogInstruments.add(ins);
     }
   }
@@ -3249,14 +3259,18 @@ function renderLogTable(search) {
     if (countEl) countEl.textContent = selectedCount + ' selected';
   }
 
-  body.innerHTML = filtered.map((t,i) => {
+  // PERF: render at most LOG_PAGE rows at once; "Load more" extends
+  window._logRenderLimit = window._logRenderLimit || 300;
+  const totalFiltered = filtered.length;
+  const capped = filtered.slice(0, window._logRenderLimit);
+  body.innerHTML = capped.map((t,i) => {
     const isNew = sessionTrades.some(s => s._id === t._id);
     const safeId = String(t._id||i).replace(/'/g,"\'");
     const tradeRealId = String(t._id || t.id || i);
     const isChecked = selectedTradeIds[tradeRealId] ? 'checked' : '';
     return `<tr ${isNew?'style="background:rgba(0,212,170,0.04)"':''}>
       <td style="text-align:center"><input type="checkbox" class="trade-checkbox" data-id="${tradeRealId}" ${isChecked} onchange="toggleTradeSelect('${safeId}', this.checked)" style="cursor:pointer;width:16px;height:16px;"></td>
-      <td style="color:var(--text-dim)">${filtered.length-i}</td>
+      <td style="color:var(--text-dim)">${totalFiltered-i}</td>
       <td>${t.date||'—'}</td>
       <td style="font-weight:700">${(t.instrument||'').toUpperCase()}</td>
       <td>${t.system||'—'}</td>
@@ -3265,6 +3279,8 @@ function renderLogTable(search) {
       <td>${wlBadge(t.l3_wl)}</td>
       <td>${wlBadge(t.l4_wl)}</td>
       <td>${wlBadge(t.l5_wl)}</td>
+      <td>${wlBadge(t.l6_wl)}</td>
+      <td>${wlBadge(t.l7_wl)}</td>
       <td style="color:${t.net_pips>=0?'var(--win)':'var(--loss)'}">${t.net_pips!=null?(t.net_pips>0?'+':'')+t.net_pips:'—'}</td>
       <td>${outcomeChip(t.outcome)}</td>
       <td style="color:var(--text-dim);font-size:11px">${t.notes||''}</td>
@@ -3275,6 +3291,13 @@ function renderLogTable(search) {
       </td>
     </tr>`;
   }).join('');
+  if (totalFiltered > window._logRenderLimit) {
+    body.innerHTML += `<tr><td colspan="14" style="text-align:center;padding:14px;">
+      <button class="btn" style="padding:8px 22px;cursor:pointer;"
+        onclick="window._logRenderLimit += 500; renderLogTable(document.querySelector('.log-search').value)">
+        Load more (${totalFiltered - window._logRenderLimit} hidden)
+      </button></td></tr>`;
+  }
 }
 
 async function handleDelete(id) {
@@ -3576,7 +3599,7 @@ function closeEditModal() {
 }
 
 function renderEditTierGrid(trade) {
-  const tiers = ['L1','L2','L3','L4','L5'];
+  const tiers = ['L1','L2','L3','L4','L5','L6','L7'];
   const colors = ['var(--win)','var(--l2)','var(--l3)','var(--l4)','var(--l5)'];
   const bgs = ['rgba(16,185,129,0.15)','rgba(59,130,246,0.15)','rgba(139,92,246,0.15)','rgba(236,72,153,0.15)','rgba(249,115,22,0.15)'];
 
@@ -3602,7 +3625,7 @@ function renderEditTierGrid(trade) {
 
 function setEditTier(tier, value) {
   editTierState[tier] = value;
-  const tiers = ['L1','L2','L3','L4','L5'];
+  const tiers = ['L1','L2','L3','L4','L5','L6','L7'];
   const idx = tiers.indexOf(tier);
   // Lock/unlock downstream tiers
   if (value !== 'L') {
@@ -3682,7 +3705,7 @@ function getFiltered() {
 function computeStats(trades) {
   const total = trades.length;
   if (!total) return null;
-  const outcomes={}, tierCounts={L1:0,L2:0,L3:0,L4:0,L5:0}, tierWins={L1:0,L2:0,L3:0,L4:0,L5:0}, byInstrument={};
+  const outcomes={}, tierCounts={L1:0,L2:0,L3:0,L4:0,L5:0,L6:0,L7:0}, tierWins={L1:0,L2:0,L3:0,L4:0,L5:0,L6:0,L7:0}, byInstrument={};
   trades.forEach(t => {
     outcomes[t.outcome]=(outcomes[t.outcome]||0)+1;
     tierCounts.L1++; if(t.l1_wl==='W') tierWins.L1++;
@@ -3690,6 +3713,8 @@ function computeStats(trades) {
     if(t.l3_wl){tierCounts.L3++;if(t.l3_wl==='W')tierWins.L3++;}
     if(t.l4_wl){tierCounts.L4++;if(t.l4_wl==='W')tierWins.L4++;}
     if(t.l5_wl){tierCounts.L5++;if(t.l5_wl==='W')tierWins.L5++;}
+    if(t.l6_wl){tierCounts.L6++;if(t.l6_wl==='W')tierWins.L6++;}
+    if(t.l7_wl){tierCounts.L7++;if(t.l7_wl==='W')tierWins.L7++;}
     const ins=t.instrument;
     if(!byInstrument[ins]) byInstrument[ins]={total:0,l1w:0,l1t:0,l2w:0,l2t:0,l3w:0,l3t:0,clean:0,maxloss:0};
     const b=byInstrument[ins]; b.total++;b.l1t++;
@@ -3728,7 +3753,7 @@ function renderOutcomePills(s) {
 
 function renderTierFlow(s) {
   const{tierCounts,tierWins}=s;
-  const tiers=['L1','L2','L3','L4','L5'],colors=['var(--win)','var(--l2)','var(--l3)','var(--l4)','var(--l5)'];
+  const tiers=['L1','L2','L3','L4','L5','L6','L7'],colors=['var(--win)','var(--l2)','var(--l3)','var(--l4)','var(--l5)','#e879f9','#f472b6'];
   const mx=Math.max(...tiers.map(t=>tierCounts[t]));
   document.getElementById('tierFlow').innerHTML=tiers.map((t,i)=>{const cnt=tierCounts[t],wr=cnt?(tierWins[t]/cnt*100).toFixed(1):'—',bp=cnt?(cnt/mx*100).toFixed(1):0;return`<div class="tier-block"><div class="tier-label">Tier ${i+1}</div><div class="tier-name" style="color:${colors[i]}">${t}</div><div class="tier-bar-bg"><div class="tier-bar-fill" style="width:${bp}%;background:${colors[i]}"></div></div><div class="tier-stats"><div class="tier-stat" style="color:${colors[i]}"><span>${cnt}</span>trades</div><div class="tier-stat"><span>${wr}%</span>win rate</div></div></div>`;}).join('');
 }
@@ -3753,7 +3778,7 @@ function renderCharts(s) {
   charts['donut']=new Chart(document.getElementById('outcomeDonut'),{type:'doughnut',data:{labels:oKeys.map(k=>k.replace(' recovered',' Rec.')),datasets:[{data:oKeys.map(k=>outcomes[k]||0),backgroundColor:c6,borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{family:'Space Mono',size:9},padding:8}}}}});
 
   destroyChart('esc');
-  charts['esc']=new Chart(document.getElementById('escalationBar'),{type:'bar',data:{labels:['L1','L2 triggered','L3 triggered','L4 triggered','L5 triggered'],datasets:[{label:'Trades reaching tier',data:['L1','L2','L3','L4','L5'].map(k=>tierCounts[k]),backgroundColor:['rgba(16,185,129,0.7)','rgba(59,130,246,0.7)','rgba(139,92,246,0.7)','rgba(236,72,153,0.7)','rgba(249,115,22,0.7)'],borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{...axOpts},y:{...axOpts}}}});
+  charts['esc']=new Chart(document.getElementById('escalationBar'),{type:'bar',data:{labels:['L1','L2 triggered','L3 triggered','L4 triggered','L5 triggered'],datasets:[{label:'Trades reaching tier',data:['L1','L2','L3','L4','L5','L6','L7'].map(k=>tierCounts[k]),backgroundColor:['rgba(16,185,129,0.7)','rgba(59,130,246,0.7)','rgba(139,92,246,0.7)','rgba(236,72,153,0.7)','rgba(249,115,22,0.7)'],borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{...axOpts},y:{...axOpts}}}});
 
   destroyChart('l1wr');
   charts['l1wr']=new Chart(document.getElementById('l1WinChart'),{type:'bar',data:{labels:instruments.map(i=>i.toUpperCase()),datasets:[{label:'L1 Win Rate',data:instruments.map(i=>byInstrument[i].l1t?+(byInstrument[i].l1w/byInstrument[i].l1t*100).toFixed(1):0),backgroundColor:instruments.map(i=>{const r=byInstrument[i].l1t?byInstrument[i].l1w/byInstrument[i].l1t:0;return r>=.7?'rgba(16,185,129,0.7)':r>=.5?'rgba(59,130,246,0.7)':'rgba(239,68,68,0.7)';}),borderRadius:6}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{...axOpts,max:100,ticks:{...axOpts.ticks,callback:v=>v+'%'}},y:{...axOpts}}}});
@@ -3998,6 +4023,8 @@ function computeTierStats(trades) {
     l3: { reached: 0, wins: 0 },
     l4: { reached: 0, wins: 0 },
     l5: { reached: 0, wins: 0 },
+    l6: { reached: 0, wins: 0 },
+    l7: { reached: 0, wins: 0 },
     recovery: 0,
     cleanWins: 0
   };
@@ -4024,6 +4051,16 @@ function computeTierStats(trades) {
     if (t.l1_wl === 'L' && t.l2_wl === 'L' && t.l3_wl === 'L' && t.l4_wl === 'L') {
       stats.l5.reached++;
       if (t.l5_wl === 'W') stats.l5.wins++;
+    }
+
+    if (t.l1_wl === 'L' && t.l2_wl === 'L' && t.l3_wl === 'L' && t.l4_wl === 'L' && t.l5_wl === 'L') {
+      stats.l6.reached++;
+      if (t.l6_wl === 'W') stats.l6.wins++;
+    }
+
+    if (t.l1_wl === 'L' && t.l2_wl === 'L' && t.l3_wl === 'L' && t.l4_wl === 'L' && t.l5_wl === 'L' && t.l6_wl === 'L') {
+      stats.l7.reached++;
+      if (t.l7_wl === 'W') stats.l7.wins++;
     }
 
     if (t.outcome !== 'Max loss') stats.recovery++;
@@ -4114,13 +4151,15 @@ function renderWinProbMatrix() {
           <td>${formatPct(s.l3.wins, s.l3.reached)}</td>
           <td>${formatPct(s.l4.wins, s.l4.reached)}</td>
           <td>${formatPct(s.l5.wins, s.l5.reached)}</td>
+          <td>${formatPct(s.l6.wins, s.l6.reached)}</td>
+          <td>${formatPct(s.l7.wins, s.l7.reached)}</td>
           <td>${formatPct(s.recovery, s.total)}</td>
         </tr>
       `;
     });
     // Separator before instrument rows
     if (instruments.length > 1) {
-      rows += `<tr><td colspan="7" style="padding:4px 16px;font-size:9px;color:var(--text-dim);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;background:var(--bg);">By Instrument</td></tr>`;
+      rows += `<tr><td colspan="9" style="padding:4px 16px;font-size:9px;color:var(--text-dim);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;background:var(--bg);">By Instrument</td></tr>`;
     }
   }
 
@@ -4142,6 +4181,8 @@ function renderWinProbMatrix() {
         <td>${formatPct(s.l3.wins, s.l3.reached)}</td>
         <td>${formatPct(s.l4.wins, s.l4.reached)}</td>
         <td>${formatPct(s.l5.wins, s.l5.reached)}</td>
+        <td>${formatPct(s.l6.wins, s.l6.reached)}</td>
+        <td>${formatPct(s.l7.wins, s.l7.reached)}</td>
         <td>${formatPct(s.recovery, s.total)}</td>
       </tr>
     `;
@@ -4155,11 +4196,13 @@ function renderWinProbMatrix() {
       <td>${formatPct(allStats.l3.wins, allStats.l3.reached)}</td>
       <td>${formatPct(allStats.l4.wins, allStats.l4.reached)}</td>
       <td>${formatPct(allStats.l5.wins, allStats.l5.reached)}</td>
+      <td>${formatPct(allStats.l6.wins, allStats.l6.reached)}</td>
+      <td>${formatPct(allStats.l7.wins, allStats.l7.reached)}</td>
       <td>${formatPct(allStats.recovery, allStats.total)}</td>
     </tr>
   `;
 
-  document.getElementById('winProbBody').innerHTML = rows || '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:30px;font-family:Space Mono,monospace;font-size:12px;">No trades match selected filters.</td></tr>';
+  document.getElementById('winProbBody').innerHTML = rows || '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:30px;font-family:Space Mono,monospace;font-size:12px;">No trades match selected filters.</td></tr>';
 }
 
 function renderEscalationGrid() {
@@ -4293,7 +4336,7 @@ function renderAnalytics() {
     document.getElementById('analyticsKpiStrip').innerHTML = 
       '<div style="color:var(--text-dim);font-family:Space Mono,monospace;font-size:12px;padding:20px">No trades match selected instruments.</div>';
     document.getElementById('winProbBody').innerHTML = 
-      '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:30px;font-family:Space Mono,monospace;font-size:12px;">Select at least one instrument to view data.</td></tr>';
+      '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:30px;font-family:Space Mono,monospace;font-size:12px;">Select at least one instrument to view data.</td></tr>';
     document.getElementById('escalationGrid').innerHTML = 
       '<div style="color:var(--text-dim);font-family:Space Mono,monospace;font-size:12px;padding:20px;text-align:center;width:100%">No data available.</div>';
     return;
@@ -4355,6 +4398,18 @@ function getAllStrategies() {
   const all = [...BUILTIN_STRATEGIES];
   customStrategies.forEach(cs => {
     if (!all.find(s => s.name === cs.name)) all.push(cs);
+  });
+  // Data-driven: any strategy name present in the trades themselves also gets a
+  // card, even if it was imported on a different browser (localStorage is per-browser).
+  const seen = new Set(all.map(s => s.name));
+  (allTrades || []).forEach(t => {
+    const name = (t.system || '').trim();
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    const isRev = /reversal/i.test(name);
+    all.push({ name, type: isRev ? 'Reversal' : 'Continuation',
+      desc: 'Imported strategy (derived from trade data)',
+      icon: isRev ? '🔄' : '➡️', cls: isRev ? 'rev' : 'cont' });
   });
   return all;
 }
@@ -4477,9 +4532,25 @@ function saveNewStrategy() {
   showToast(`✅ Strategy "${name}" added`);
 }
 
-function handleDeleteStrategy(name) {
-  if (!confirm(`Delete strategy "${name}"? This will not delete any trades using this strategy.`)) return;
+async function handleDeleteStrategy(name) {
+  const count = allTrades.filter(t => (t.system||'') === name).length;
+  const msg = count > 0
+    ? `Delete strategy "${name}" AND its ${count} trades from the database?\n\nThis permanently removes the trades from Supabase. OK = delete strategy + trades. Cancel = abort.`
+    : `Delete strategy "${name}"? (it has no trades)`;
+  if (!confirm(msg)) return;
+  if (count > 0) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?system=eq.${encodeURIComponent(name)}`, {
+        method: 'DELETE', headers: SB_HEADERS
+      });
+      if (!res.ok) { alert('Failed to delete trades: ' + res.status + ' ' + (await res.text()).slice(0,150)); return; }
+    } catch (e) { alert('Delete error: ' + e.message); return; }
+    allTrades = allTrades.filter(t => (t.system||'') !== name);
+  }
   deleteStrategy(name);
+  renderStrategies();
+  if (typeof renderAll === 'function') renderAll();
+  alert(`Deleted "${name}"` + (count>0 ? ` and ${count} trades.` : '.'));
 }
 
 function deleteStrategy(name) {
@@ -4640,12 +4711,21 @@ function parseBacktestReport(html) {
   const conCount = sequences.filter(s => s.orders[0].origin === 'CON').length;
   const revCount = sequences.length - conCount;
 
-  _importParsed = { sequences, maxTierSeen };
+  // OPTION (a): read the strategy's own name from the report (log prefix [RopaWaveVNN] or class name)
+  let detectedName = null;
+  let nm = html.match(/\[(RopaWave[A-Za-z0-9]+)\]/);
+  if (nm) detectedName = nm[1];
+  if (!detectedName) { nm = html.match(/class\s+(RopaWave[A-Za-z0-9]+)/); if (nm) detectedName = nm[1]; }
+  if (detectedName) document.getElementById('importBaseName').value = detectedName;
+
+  _importParsed = { sequences, maxTierSeen, detectedName };
 
   const pv = document.getElementById('importPreview');
   pv.style.display = 'block';
   pv.innerHTML = `<strong>Parsed successfully</strong><br>
+    ${detectedName ? 'Detected strategy: <strong>'+detectedName+'</strong><br>' : '<span style="color:var(--warn)">No RopaWaveVNN name found in report — using the base name field</span><br>'}
     ${orders.length} tier orders &rarr; <strong>${sequences.length} sequences</strong><br>
+    Will create: <strong>${(detectedName||'?')+' Continuation'}</strong> &amp; <strong>${(detectedName||'?')+' Reversal'}</strong><br>
     Continuation: <strong>${conCount}</strong> &nbsp;|&nbsp; Reversal: <strong>${revCount}</strong><br>
     Instruments: ${Object.keys(byInst).join(', ')}<br>
     Date range: ${orders[0].open.slice(0,10)} &rarr; ${orders[orders.length-1].close.slice(0,10)}<br>
@@ -4665,15 +4745,22 @@ function importLog(msg, color) {
 
 async function runBacktestImport() {
   if (!_importParsed) return;
-  const base = document.getElementById('importBaseName').value.trim();
-  if (!base) { alert('Enter a strategy base name first.'); return; }
+  const base = (_importParsed.detectedName || document.getElementById('importBaseName').value.trim());
+  if (!base) { alert('No strategy name detected and none entered.'); return; }
 
   const contName = base + ' Continuation';
   const revName  = base + ' Reversal';
 
-  // duplicate guard
+  // OPTION (a): never duplicate into an existing version. If this exact version's
+  // strategies already hold trades, block the import entirely (re-run under a new
+  // version name if you want a fresh set).
   const existing = allTrades.filter(t => t.system === contName || t.system === revName).length;
-  if (existing > 0 && !confirm(existing + ' trades already exist under these strategy names. Import anyway (may duplicate)?')) return;
+  if (existing > 0) {
+    alert(existing + ' trades already exist under "' + contName + '" / "' + revName + '".\n\n'
+      + 'This version has already been imported. To re-import, first delete those trades, '
+      + 'or run the backtest as a new version (e.g. RopaWaveV' + (parseInt((base.match(/V(\d+)/)||[])[1]||0)+1) + ') so it files under fresh strategy names.');
+    return;
+  }
 
   const btn = document.getElementById('importRunBtn');
   btn.disabled = true;
@@ -4700,22 +4787,22 @@ async function runBacktestImport() {
       instrument: IMPORT_INSTRUMENT_MAP[seq.inst] || seq.inst.toLowerCase().replace('/',''),
       system: first.origin === 'CON' ? contName : revName,
       l1_wl:null,l1_pips:null,l2_wl:null,l2_pips:null,l3_wl:null,l3_pips:null,
-      l4_wl:null,l4_pips:null,l5_wl:null,l5_pips:null,
+      l4_wl:null,l4_pips:null,l5_wl:null,l5_pips:null,l6_wl:null,l6_pips:null,l7_wl:null,l7_pips:null,
       net_pips: Math.round(seq.orders.reduce((s,o)=>s+o.plpips,0)*10)/10,
       notes: first.origin + ' | ' + first.dir + ' | ' + first.open + ' -> ' + seq.orders[seq.orders.length-1].close
     };
     let deepNote = '';
     seq.orders.forEach(o => {
       const wl = o.plpips > 0 ? 'W' : 'L';
-      if (o.tier <= 5) { row['l'+o.tier+'_wl'] = wl; row['l'+o.tier+'_pips'] = o.plpips; }
+      if (o.tier <= 7) { row['l'+o.tier+'_wl'] = wl; row['l'+o.tier+'_pips'] = o.plpips; }
       else deepNote += ' T'+o.tier+':'+wl+'('+o.plpips+'p)';
     });
-    if (deepNote) row.notes += ' | beyond L5:' + deepNote;
-    // outcome, same convention as the entry form
+    if (deepNote) row.notes += ' | beyond L7:' + deepNote;
+    // outcome, same convention as the entry form (now to L7)
     const lastWin = seq.orders[seq.orders.length-1].plpips > 0;
     if (!lastWin) row.outcome = 'Max loss';
     else {
-      const winTier = Math.min(seq.orders[seq.orders.length-1].tier, 5);
+      const winTier = Math.min(seq.orders[seq.orders.length-1].tier, 7);
       row.outcome = winTier === 1 ? 'Clean win' : 'L' + winTier + ' recovered';
     }
     return row;
