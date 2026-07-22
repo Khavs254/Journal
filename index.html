@@ -2454,6 +2454,36 @@ async function fetchAllTrades() {
   return all;
 }
 
+// Fetch only rows created after `ts` (ISO timestamp) — used by the poll
+// fallback so a background refresh doesn't re-download the entire table.
+async function fetchNewTradesSince(ts) {
+  const PAGE = 1000;
+  let from = 0;
+  let all = [];
+  while (true) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?select=*&created_at=gt.${encodeURIComponent(ts)}&order=created_at.asc`,
+      { headers: { ...SB_HEADERS, Range: `${from}-${from + PAGE - 1}` } }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const page = await res.json();
+    if (!Array.isArray(page)) throw new Error('Non-array response: ' + JSON.stringify(page).slice(0, 120));
+    all = all.concat(page);
+    if (page.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
+// Merge freshly-fetched rows into the in-memory trade list without a full
+// re-download. Existing rows win only if not present in `incoming`.
+function mergeTrades(existing, incoming) {
+  if (!incoming.length) return existing;
+  const byId = new Map(existing.map(t => [t.id, t]));
+  incoming.forEach(t => byId.set(t.id, t));
+  return [...byId.values()].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
 async function checkAndSetupTable() {
   // Ping the table — if 404 it doesn't exist
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?select=id&limit=1`, { headers: SB_HEADERS });
@@ -2606,6 +2636,7 @@ async function loadTrades() {
           localStorage.setItem('embeddedSyncDone', '1');
           document.getElementById('syncBadge').textContent = `🟢 Supabase (${result.length} trades)`;
           showToast(`✅ ${result.length} trades synced to Supabase`);
+          lastSyncTimestamp = new Date().toISOString();
           return result;
         } catch(e) {
           showToast('⚠️ Sync failed, using local data — ' + e.message, true);
@@ -2621,6 +2652,7 @@ async function loadTrades() {
       }
 
       document.getElementById('syncBadge').textContent = `🟢 Supabase (${data.length} trades)`;
+      lastSyncTimestamp = new Date().toISOString();
       return data;
     } catch(e) {
       showToast('⚠️ Supabase load failed — ' + e.message, true);
@@ -2687,6 +2719,11 @@ async function deleteTrade(id) {
 // ══════════════════════════════════════════════════════
 let realtimeChannel = null;
 let _sbClient = null; // singleton — never call createClient() more than once
+let lastSyncTimestamp = null; // ISO timestamp of last successful sync — lets the poll fallback fetch only NEW rows instead of the whole table
+let lastRefreshAt = 0;        // ms epoch of the last refresh — debounces visibility-triggered refetches so they don't stack on a recent poll
+let pollTickCount = 0;        // counts poll-fallback ticks — forces a periodic full reconciliation so edits/deletes made elsewhere still land
+const POLL_INTERVAL_MS = 60000;   // was 15000 — 15s polling was the main source of egress; 60s is still plenty responsive for a personal journal
+const FULL_RESYNC_EVERY_N_POLLS = 10; // every 10th poll (~10 min at 60s) does a full fetch to catch updates/deletes an incremental created_at fetch can't see
 
 function getSupabaseClient() {
   if (_sbClient) return _sbClient;
@@ -2728,16 +2765,37 @@ function refreshAfterRemoteChange() {
   updateSyncBadgeCount();
 }
 
-async function refreshTradesFromServer() {
+async function refreshTradesFromServer(forceFullSync = false) {
   if (!USE_SUPABASE || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
+  lastRefreshAt = Date.now();
   try {
-    const data = await fetchAllTrades();
+    // Most refreshes only need "what's new since last time" — a full
+    // select=* re-download of the whole table every call is what was
+    // driving egress. We still do a full fetch on first load and
+    // periodically (see FULL_RESYNC_EVERY_N_POLLS) to catch remote
+    // updates/deletes, which an created_at-only fetch can't see.
+    const doFull = forceFullSync || !lastSyncTimestamp;
+    const data = doFull
+      ? await fetchAllTrades()
+      : mergeTrades(allTrades, await fetchNewTradesSince(lastSyncTimestamp));
     data.forEach(t => { if (!t._id) t._id = t.id; });
     allTrades = data;
+    lastSyncTimestamp = new Date().toISOString();
     refreshAfterRemoteChange();
   } catch(e) {
     // Silent — this is just a background safety-net refresh, not a user action.
   }
+}
+
+// Wrapper used by the poll-fallback timer only (not by visibilitychange or
+// realtime callbacks). Skips work entirely while the tab is backgrounded —
+// no point spending egress refreshing a screen nobody is looking at — and
+// forces a full reconciliation fetch every Nth tick.
+function pollTick() {
+  if (document.hidden) return;
+  pollTickCount++;
+  const doFull = pollTickCount % FULL_RESYNC_EVERY_N_POLLS === 0;
+  refreshTradesFromServer(doFull);
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -2745,7 +2803,12 @@ document.addEventListener('visibilitychange', () => {
   // or the tab is backgrounded. Re-sync as soon as the device/tab is active
   // again, so nothing is missed even if a realtime event slipped through.
   if (document.visibilityState === 'visible') {
-    refreshTradesFromServer();
+    // Skip if something already refreshed us very recently (e.g. a poll
+    // tick fired just before the tab regained focus) — avoids stacking a
+    // second full/incremental fetch on top of one that just happened.
+    if (Date.now() - lastRefreshAt > 20000) {
+      refreshTradesFromServer();
+    }
     // Also attempt to reconnect realtime if the channel was dropped while backgrounded
     if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL' && realtimeChannel) {
       const state = realtimeChannel.state;
@@ -2766,7 +2829,7 @@ function subscribeRealtime() {
     console.warn('Supabase JS client failed to load — live sync disabled, saving/loading still works.');
     // Start polling as the only option
     if (!window._pollFallback) {
-      window._pollFallback = setInterval(refreshTradesFromServer, 15000);
+      window._pollFallback = setInterval(pollTick, POLL_INTERVAL_MS);
     }
     return;
   }
@@ -2815,7 +2878,7 @@ function subscribeRealtime() {
         realtimeChannel = null; // allow re-subscribe next attempt
         // Start polling fallback
         if (!window._pollFallback) {
-          window._pollFallback = setInterval(refreshTradesFromServer, 15000);
+          window._pollFallback = setInterval(pollTick, POLL_INTERVAL_MS);
         }
         // Schedule ONE reconnect attempt — exponential-style, won't loop endlessly
         if (!window._realtimeReconnectTimer) {
