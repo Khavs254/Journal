@@ -1564,6 +1564,23 @@ input::placeholder{color:var(--text-dim);}
   font-family:'Space Mono',monospace;
 }
 .risk-tier-row .rt-value.cum{color:var(--accent);}
+/* ── Scenario Simulator ── */
+.sim-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;padding:0 16px 12px;}
+.sim-inputs .calc-group label{font-size:9px;}
+.sim-probs{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:0 16px 12px;}
+.sim-prob-box{display:flex;flex-direction:column;gap:3px;}
+.sim-prob-box label{font-size:9px;color:var(--text-dim);font-family:'Space Mono',monospace;text-transform:uppercase;text-align:center;}
+.sim-prob-box input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 4px;font-family:'Space Mono',monospace;font-size:12px;text-align:center;}
+.sim-out-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:12px 16px;}
+.sim-out-box{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;}
+.sim-out-box .so-label{font-size:9px;color:var(--text-dim);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:.5px;}
+.sim-out-box .so-value{font-size:17px;font-weight:800;font-family:'Space Mono',monospace;margin-top:3px;}
+.sim-out-box .so-sub{font-size:9px;color:var(--text-dim);font-family:'Space Mono',monospace;margin-top:2px;}
+.sim-chart-wrap{padding:4px 16px 14px;}
+.sim-note{margin:0 16px 14px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);font-size:11px;line-height:1.7;color:var(--text-dim);font-family:'Space Mono',monospace;}
+.sim-run-btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;}
+.sim-run-btn:hover{filter:brightness(1.15);}
+@media(max-width:768px){.sim-probs{grid-template-columns:repeat(4,1fr);}}
 
 .calc-inputs{
   display:flex;
@@ -1779,7 +1796,7 @@ input::placeholder{color:var(--text-dim);}
     <div class="analytics-section">
       <div class="analytics-section-header">
         <h2>🧮 Risk Calculator</h2>
-        <span class="section-sub">Martingale model · TP 15 pips · SL 30 pips · Risk = Cum × 2</span>
+        <span class="section-sub">Real ladder · TP 15 / SL 30 to L2 · TP 30 from L3 (pure recovery) · 3-9-12-24-48-96-192</span>
       </div>
 
       <!-- Full Martingale Table -->
@@ -1859,11 +1876,59 @@ input::placeholder{color:var(--text-dim);}
               <div style="font-size:9px;color:var(--text-dim);font-family:'Space Mono',monospace;line-height:1.8;">
                 <div>TP = <strong style="color:var(--win)">15 pips</strong> &nbsp;|&nbsp; SL = <strong style="color:var(--loss)">30 pips</strong></div>
                 <div>RR = 1:0.5 &nbsp;(need 2 wins per loss to break even)</div>
-                <div>Formula: Risk = Cumulative × 2</div>
+                <div>L1–L2: recover cum + $1.50 · L3+: TP 30, recover cum only (risk doubles)</div>
               </div>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Scenario Simulator -->
+    <div class="analytics-section">
+      <div class="analytics-section-header">
+        <h2>🎲 Scenario Simulator</h2>
+        <span class="section-sub">Monte-Carlo the ladder · win rates from your data, a strategy, or stress presets</span>
+      </div>
+
+      <div class="sim-inputs">
+        <div class="calc-group" style="grid-column:span 2;">
+          <label>Win-rate source</label>
+          <select id="simSource" onchange="loadSimSource()"></select>
+        </div>
+        <div class="calc-group"><label>Base risk $ (T1 SL loss)</label><input type="number" id="simBase" value="3" min="0.1" step="0.1"></div>
+        <div class="calc-group"><label>SL pips</label><input type="number" id="simSL" value="30" min="1"></div>
+        <div class="calc-group"><label>TP pips</label><input type="number" id="simTP" value="15" min="1"></div>
+        <div class="calc-group"><label>Wide TP from tier (0=off)</label><input type="number" id="simDeepFrom" value="3" min="0" max="8"></div>
+        <div class="calc-group"><label>Wide TP pips</label><input type="number" id="simDeepTP" value="30" min="1"></div>
+        <div class="calc-group"><label>Max tiers</label><input type="number" id="simMaxTiers" value="7" min="2" max="7"></div>
+        <div class="calc-group"><label>Sequences / year</label><input type="number" id="simSeqYr" value="190" min="1"></div>
+        <div class="calc-group"><label>Years</label><input type="number" id="simYears" value="5" min="1" max="30"></div>
+        <div class="calc-group"><label>Starting balance $</label><input type="number" id="simStart" value="1000" min="10"></div>
+        <div class="calc-group">
+          <label>Sizing mode</label>
+          <select id="simSizing">
+            <option value="fixed">Fixed base risk</option>
+            <option value="compound">Compound (% of equity)</option>
+          </select>
+        </div>
+        <div class="calc-group"><label>Compound risk %/seq</label><input type="number" id="simCompPct" value="0.3" min="0.01" step="0.01"></div>
+        <div class="calc-group"><label>Monte-Carlo runs</label><input type="number" id="simRuns" value="500" min="50" max="2000"></div>
+      </div>
+
+      <div class="sim-probs" id="simProbs">
+        <!-- per-tier win % inputs injected -->
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;padding:0 16px 14px;flex-wrap:wrap;">
+        <button class="sim-run-btn" onclick="runScenarioSim()">▶ Run Simulation</button>
+        <span id="simStatus" style="font-size:11px;color:var(--text-dim);font-family:'Space Mono',monospace;"></span>
+      </div>
+
+      <div id="simResults" style="display:none;">
+        <div class="sim-out-grid" id="simOutGrid"></div>
+        <div class="sim-chart-wrap"><div id="simChart"></div></div>
+        <div class="sim-note" id="simNote"></div>
       </div>
     </div>
 
@@ -2454,36 +2519,6 @@ async function fetchAllTrades() {
   return all;
 }
 
-// Fetch only rows created after `ts` (ISO timestamp) — used by the poll
-// fallback so a background refresh doesn't re-download the entire table.
-async function fetchNewTradesSince(ts) {
-  const PAGE = 1000;
-  let from = 0;
-  let all = [];
-  while (true) {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?select=*&created_at=gt.${encodeURIComponent(ts)}&order=created_at.asc`,
-      { headers: { ...SB_HEADERS, Range: `${from}-${from + PAGE - 1}` } }
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const page = await res.json();
-    if (!Array.isArray(page)) throw new Error('Non-array response: ' + JSON.stringify(page).slice(0, 120));
-    all = all.concat(page);
-    if (page.length < PAGE) break;
-    from += PAGE;
-  }
-  return all;
-}
-
-// Merge freshly-fetched rows into the in-memory trade list without a full
-// re-download. Existing rows win only if not present in `incoming`.
-function mergeTrades(existing, incoming) {
-  if (!incoming.length) return existing;
-  const byId = new Map(existing.map(t => [t.id, t]));
-  incoming.forEach(t => byId.set(t.id, t));
-  return [...byId.values()].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-}
-
 async function checkAndSetupTable() {
   // Ping the table — if 404 it doesn't exist
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?select=id&limit=1`, { headers: SB_HEADERS });
@@ -2636,7 +2671,6 @@ async function loadTrades() {
           localStorage.setItem('embeddedSyncDone', '1');
           document.getElementById('syncBadge').textContent = `🟢 Supabase (${result.length} trades)`;
           showToast(`✅ ${result.length} trades synced to Supabase`);
-          lastSyncTimestamp = new Date().toISOString();
           return result;
         } catch(e) {
           showToast('⚠️ Sync failed, using local data — ' + e.message, true);
@@ -2652,7 +2686,6 @@ async function loadTrades() {
       }
 
       document.getElementById('syncBadge').textContent = `🟢 Supabase (${data.length} trades)`;
-      lastSyncTimestamp = new Date().toISOString();
       return data;
     } catch(e) {
       showToast('⚠️ Supabase load failed — ' + e.message, true);
@@ -2719,11 +2752,6 @@ async function deleteTrade(id) {
 // ══════════════════════════════════════════════════════
 let realtimeChannel = null;
 let _sbClient = null; // singleton — never call createClient() more than once
-let lastSyncTimestamp = null; // ISO timestamp of last successful sync — lets the poll fallback fetch only NEW rows instead of the whole table
-let lastRefreshAt = 0;        // ms epoch of the last refresh — debounces visibility-triggered refetches so they don't stack on a recent poll
-let pollTickCount = 0;        // counts poll-fallback ticks — forces a periodic full reconciliation so edits/deletes made elsewhere still land
-const POLL_INTERVAL_MS = 60000;   // was 15000 — 15s polling was the main source of egress; 60s is still plenty responsive for a personal journal
-const FULL_RESYNC_EVERY_N_POLLS = 10; // every 10th poll (~10 min at 60s) does a full fetch to catch updates/deletes an incremental created_at fetch can't see
 
 function getSupabaseClient() {
   if (_sbClient) return _sbClient;
@@ -2765,37 +2793,16 @@ function refreshAfterRemoteChange() {
   updateSyncBadgeCount();
 }
 
-async function refreshTradesFromServer(forceFullSync = false) {
+async function refreshTradesFromServer() {
   if (!USE_SUPABASE || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
-  lastRefreshAt = Date.now();
   try {
-    // Most refreshes only need "what's new since last time" — a full
-    // select=* re-download of the whole table every call is what was
-    // driving egress. We still do a full fetch on first load and
-    // periodically (see FULL_RESYNC_EVERY_N_POLLS) to catch remote
-    // updates/deletes, which an created_at-only fetch can't see.
-    const doFull = forceFullSync || !lastSyncTimestamp;
-    const data = doFull
-      ? await fetchAllTrades()
-      : mergeTrades(allTrades, await fetchNewTradesSince(lastSyncTimestamp));
+    const data = await fetchAllTrades();
     data.forEach(t => { if (!t._id) t._id = t.id; });
     allTrades = data;
-    lastSyncTimestamp = new Date().toISOString();
     refreshAfterRemoteChange();
   } catch(e) {
     // Silent — this is just a background safety-net refresh, not a user action.
   }
-}
-
-// Wrapper used by the poll-fallback timer only (not by visibilitychange or
-// realtime callbacks). Skips work entirely while the tab is backgrounded —
-// no point spending egress refreshing a screen nobody is looking at — and
-// forces a full reconciliation fetch every Nth tick.
-function pollTick() {
-  if (document.hidden) return;
-  pollTickCount++;
-  const doFull = pollTickCount % FULL_RESYNC_EVERY_N_POLLS === 0;
-  refreshTradesFromServer(doFull);
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -2803,12 +2810,7 @@ document.addEventListener('visibilitychange', () => {
   // or the tab is backgrounded. Re-sync as soon as the device/tab is active
   // again, so nothing is missed even if a realtime event slipped through.
   if (document.visibilityState === 'visible') {
-    // Skip if something already refreshed us very recently (e.g. a poll
-    // tick fired just before the tab regained focus) — avoids stacking a
-    // second full/incremental fetch on top of one that just happened.
-    if (Date.now() - lastRefreshAt > 20000) {
-      refreshTradesFromServer();
-    }
+    refreshTradesFromServer();
     // Also attempt to reconnect realtime if the channel was dropped while backgrounded
     if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL' && realtimeChannel) {
       const state = realtimeChannel.state;
@@ -2829,7 +2831,7 @@ function subscribeRealtime() {
     console.warn('Supabase JS client failed to load — live sync disabled, saving/loading still works.');
     // Start polling as the only option
     if (!window._pollFallback) {
-      window._pollFallback = setInterval(pollTick, POLL_INTERVAL_MS);
+      window._pollFallback = setInterval(refreshTradesFromServer, 15000);
     }
     return;
   }
@@ -2878,7 +2880,7 @@ function subscribeRealtime() {
         realtimeChannel = null; // allow re-subscribe next attempt
         // Start polling fallback
         if (!window._pollFallback) {
-          window._pollFallback = setInterval(pollTick, POLL_INTERVAL_MS);
+          window._pollFallback = setInterval(refreshTradesFromServer, 15000);
         }
         // Schedule ONE reconnect attempt — exponential-style, won't loop endlessly
         if (!window._realtimeReconnectTimer) {
@@ -3860,17 +3862,20 @@ function renderPerfTable(s) {
 // ══════════════════════════════════════════════════════
 
 // Martingale model: TP=15 pips, SL=30 pips (1:2 RR)
-// Risk at each level = Cumulative_before × 2 (to recover + profit)
 // Recovery trades needed = Risk / TP_per_trade ($1 per pip base)
+// Real RopaWave ladder: T1/T2 (TP15/SL30) size for cum + base win;
+// from T3 the wide TP (30 = SL) sizes for pure recovery of cumulative only,
+// so risk doubles: 3, 9, 12, 24, 48, 96, 192, 384...
+// Recovery trades needed = New Cumulative / $1.50 base win
 const MARTINGALE = [
-  { level:'L1', cumBefore:0,      risk:3.00,    ifLoss:-3.00,    newCum:3.00,     recovery:2    },
-  { level:'L2', cumBefore:3.00,   risk:4.50,    ifLoss:-4.50,    newCum:7.50,     recovery:5    },
-  { level:'L3', cumBefore:7.50,   risk:15.00,   ifLoss:-15.00,   newCum:22.50,    recovery:15   },
-  { level:'L4', cumBefore:22.50,  risk:45.00,   ifLoss:-45.00,   newCum:67.50,    recovery:45   },
-  { level:'L5', cumBefore:67.50,  risk:135.00,  ifLoss:-135.00,  newCum:202.50,   recovery:135  },
-  { level:'L6', cumBefore:202.50, risk:405.00,  ifLoss:-405.00,  newCum:607.50,   recovery:405  },
-  { level:'L7', cumBefore:607.50, risk:1215.00, ifLoss:-1215.00, newCum:1822.50,  recovery:1215 },
-  { level:'L8', cumBefore:1822.50,risk:3645.00, ifLoss:-3645.00, newCum:5467.50,  recovery:3645 },
+  { level:'L1', cumBefore:0,   risk:3,   ifLoss:-3,   newCum:3,   recovery:2   },
+  { level:'L2', cumBefore:3,   risk:9,   ifLoss:-9,   newCum:12,  recovery:8   },
+  { level:'L3', cumBefore:12,  risk:12,  ifLoss:-12,  newCum:24,  recovery:16  },
+  { level:'L4', cumBefore:24,  risk:24,  ifLoss:-24,  newCum:48,  recovery:32  },
+  { level:'L5', cumBefore:48,  risk:48,  ifLoss:-48,  newCum:96,  recovery:64  },
+  { level:'L6', cumBefore:96,  risk:96,  ifLoss:-96,  newCum:192, recovery:128 },
+  { level:'L7', cumBefore:192, risk:192, ifLoss:-192, newCum:384, recovery:256 },
+  { level:'L8', cumBefore:384, risk:384, ifLoss:-384, newCum:768, recovery:512 },
 ];
 const RISK_VALUES = MARTINGALE.map(m => m.risk);
 const RISK_TIERS  = MARTINGALE.map(m => m.level);
@@ -4392,6 +4397,247 @@ function updateRiskCalc() {
   }
 }
 
+// ══════════════════════════════════════════════════════
+//  SCENARIO SIMULATOR (Monte-Carlo of the recovery ladder)
+// ══════════════════════════════════════════════════════
+// Per-tier win % presets. V15 numbers derive from the 22.5-yr backtest tier
+// distribution (T1..T7 = 4219/1266/528/178/82/35/12, 3 max losses):
+// winRate(n) = 1 - reached(n+1)/reached(n).
+const SIM_PRESETS = {
+  v15:    { label:'V15 backtest (22.5yr)',      probs:[70.0,58.3,66.3,53.9,57.3,65.7,75.0], seqYr:191 },
+  flat65: { label:'Flat 65% every tier',        probs:[65,65,65,65,65,65,65] },
+  stress5:{ label:'Stress: V15 minus 5pts',     probs:[65.0,53.3,61.3,48.9,52.3,60.7,70.0], seqYr:191 },
+  deepstress:{ label:'Deep-tier stress (T4+ −10pts)', probs:[70.0,58.3,66.3,43.9,47.3,55.7,65.0], seqYr:191 },
+};
+
+function populateSimSources(keepSelection) {
+  const sel = document.getElementById('simSource');
+  if (!sel) return;
+  const prev = keepSelection ? sel.value : null;
+  let html = '';
+  Object.entries(SIM_PRESETS).forEach(([k,p]) => html += `<option value="preset:${k}">${p.label}</option>`);
+  html += `<option value="live:*">Live journal — ALL trades</option>`;
+  const names = new Set();
+  (allTrades || []).forEach(t => { const n=(t.system||'').trim(); if(n) names.add(n); });
+  [...names].sort().forEach(n => html += `<option value="live:${n.replace(/"/g,'&quot;')}">Live — ${n}</option>`);
+  sel.innerHTML = html;
+  if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
+function initScenarioSim() {
+  // build the 7 per-tier probability inputs
+  const wrap = document.getElementById('simProbs');
+  if (wrap && !wrap.children.length) {
+    let h = '';
+    for (let i=1;i<=7;i++) h += `<div class="sim-prob-box"><label>L${i} win %</label><input type="number" id="simP${i}" min="0" max="100" step="0.1"></div>`;
+    wrap.innerHTML = h;
+  }
+  populateSimSources(false);
+  loadSimSource();
+}
+
+function loadSimSource() {
+  const sel = document.getElementById('simSource');
+  if (!sel || !sel.value) return;
+  const [kind, key] = sel.value.split(/:(.*)/s);
+  let probs = null, seqYr = null;
+
+  if (kind === 'preset') {
+    const p = SIM_PRESETS[key];
+    if (p) { probs = p.probs; seqYr = p.seqYr || null; }
+  } else {
+    const trades = key === '*' ? (allTrades||[]) : (allTrades||[]).filter(t => (t.system||'').trim() === key);
+    if (trades.length) {
+      const st = computeTierStats(trades);
+      probs = ['l1','l2','l3','l4','l5','l6','l7'].map(k =>
+        st[k].reached ? +(st[k].wins / st[k].reached * 100).toFixed(1) : 100);
+      // estimate sequences/year from the date span of the data
+      const dates = trades.map(t => new Date(t.date)).filter(d => !isNaN(d));
+      if (dates.length > 1) {
+        const yrs = Math.max(0.1, (Math.max(...dates) - Math.min(...dates)) / 3.156e10);
+        seqYr = Math.round(trades.length / yrs);
+      }
+    } else {
+      probs = [100,100,100,100,100,100,100];
+    }
+  }
+  if (probs) probs.forEach((p,i) => { const el = document.getElementById('simP'+(i+1)); if (el) el.value = p; });
+  if (seqYr) { const el = document.getElementById('simSeqYr'); if (el) el.value = seqYr; }
+}
+
+// Build the ladder sizing plan matching the real RopaWave rule:
+// tiers BELOW the wide-TP threshold size for cum + one base win; wide-TP
+// tiers (TP = 30 = SL) size for PURE RECOVERY of cumulative only, so a deep
+// win nets ~$0 and risk doubles each tier: 3, 9, 12, 24, 48, 96, 192.
+function simLadderPlan(baseRisk, sl, tp, deepFrom, deepTP, maxTiers) {
+  const baseWin = baseRisk * tp / sl;
+  const tiers = []; let cum = 0;
+  for (let n=1; n<=maxTiers; n++) {
+    const isDeep = deepFrom > 0 && n >= deepFrom;
+    const tpn = isDeep ? deepTP : tp;
+    let risk, winNet;
+    if (n === 1) { risk = baseRisk; winNet = baseRisk * tpn / sl; }
+    else {
+      const target = cum + (isDeep ? 0 : baseWin); // deep tiers: recover cum only
+      const lot = target / tpn;                    // $/pip
+      risk = lot * sl;                             // loss if SL hit
+      winNet = target - cum;                       // baseWin below deepFrom, $0 deep
+    }
+    cum += risk;
+    tiers.push({ risk, winNet, cumAfter: cum });
+  }
+  return { tiers, baseWin, cumTotal: cum };
+}
+
+function simPercentile(sorted, p) {
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+function runScenarioSim() {
+  const g = id => parseFloat((document.getElementById(id)||{}).value) || 0;
+  const baseRisk = g('simBase') || 3, sl = g('simSL') || 30, tp = g('simTP') || 15;
+  const deepFrom = Math.round(g('simDeepFrom')), deepTP = g('simDeepTP') || tp;
+  const maxTiers = Math.min(7, Math.max(2, Math.round(g('simMaxTiers')) || 7));
+  const seqYr = Math.max(1, Math.round(g('simSeqYr')) || 190);
+  const years = Math.min(30, Math.max(1, Math.round(g('simYears')) || 5));
+  const start = g('simStart') || 1000;
+  const sizing = (document.getElementById('simSizing')||{}).value || 'fixed';
+  const compPct = g('simCompPct') || 0.3;
+  let runs = Math.min(2000, Math.max(50, Math.round(g('simRuns')) || 500));
+
+  const probs = [];
+  for (let i=1;i<=maxTiers;i++) probs.push(Math.min(100, Math.max(0, g('simP'+i))) / 100);
+
+  let totalSeqs = seqYr * years;
+  if (runs * totalSeqs > 6e6) runs = Math.max(50, Math.floor(6e6 / totalSeqs)); // keep the browser responsive
+
+  const fixedPlan = simLadderPlan(baseRisk, sl, tp, deepFrom, deepTP, maxTiers);
+
+  // sampling grid for the equity chart
+  const SAMPLES = 120;
+  const step = Math.max(1, Math.floor(totalSeqs / SAMPLES));
+  const nSamples = Math.floor(totalSeqs / step) + 1;
+
+  const finals = [], maxDDs = [], haltCounts = [];
+  let bustRuns = 0, underfundedRuns = 0;
+  const sampleMatrix = []; // [run][sampleIdx]
+
+  for (let r = 0; r < runs; r++) {
+    let eq = start, peak = start, maxDD = 0, halts = 0, bust = false, under = false;
+    const path = [start];
+    let plan = fixedPlan;
+
+    for (let s = 1; s <= totalSeqs; s++) {
+      if (sizing === 'compound') {
+        const br = Math.max(0.01, eq * compPct / 100);
+        plan = simLadderPlan(br, sl, tp, deepFrom, deepTP, maxTiers);
+      }
+      // play one sequence through the ladder
+      let net = -plan.cumTotal; // assume max loss unless a tier wins
+      for (let n = 0; n < maxTiers; n++) {
+        if (Math.random() < probs[n]) { net = plan.tiers[n].winNet; break; }
+      }
+      if (net < 0) halts++;
+      eq += net;
+      if (eq > peak) peak = eq;
+      const dd = peak - eq;
+      if (dd > maxDD) maxDD = dd;
+      if (eq < plan.cumTotal) under = true;   // can no longer fund a full ladder
+      if (eq <= 0) { bust = true; eq = 0; }
+      if (s % step === 0) path.push(eq);
+      if (bust) break;
+    }
+    while (path.length < nSamples) path.push(eq); // pad busted/short paths
+    finals.push(eq); maxDDs.push(maxDD); haltCounts.push(halts);
+    if (bust) bustRuns++;
+    if (under) underfundedRuns++;
+    sampleMatrix.push(path);
+  }
+
+  finals.sort((a,b)=>a-b);
+  const ddSorted = [...maxDDs].sort((a,b)=>a-b);
+  const mean = finals.reduce((a,b)=>a+b,0)/runs;
+  const median = simPercentile(finals, 0.5);
+  const p5 = simPercentile(finals, 0.05), p95 = simPercentile(finals, 0.95);
+  const medDD = simPercentile(ddSorted, 0.5), worstDD = ddSorted[ddSorted.length-1];
+  const meanHalts = haltCounts.reduce((a,b)=>a+b,0)/runs;
+  const runsWithHalt = haltCounts.filter(h=>h>0).length;
+  const profRuns = finals.filter(f=>f>start).length;
+
+  const fmt = v => '$' + v.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
+  const col = v => v >= start ? 'var(--win)' : 'var(--loss)';
+  const out = document.getElementById('simOutGrid');
+  out.innerHTML = [
+    ['Median final', fmt(median), col(median), `${years}yr · ${totalSeqs.toLocaleString()} seqs/run`],
+    ['Mean final', fmt(mean), col(mean), `${runs} runs`],
+    ['5th – 95th %ile', fmt(p5)+' – '+fmt(p95), 'var(--text)', 'range of outcomes'],
+    ['Profitable runs', (profRuns/runs*100).toFixed(1)+'%', profRuns/runs>=0.8?'var(--win)':'var(--warn)', `${profRuns}/${runs} end above start`],
+    ['P(≥1 max-loss)', (runsWithHalt/runs*100).toFixed(1)+'%', runsWithHalt/runs>0.5?'var(--warn)':'var(--win)', `mean ${meanHalts.toFixed(2)} halts/run`],
+    ['Max-loss cost', '-'+fmt(fixedPlan.cumTotal), 'var(--loss)', sizing==='compound'?'at starting equity':'full '+maxTiers+'-tier ladder'],
+    ['Median max DD', fmt(medDD), 'var(--warn)', 'worst: '+fmt(worstDD)],
+    ['Bust / underfunded', (bustRuns/runs*100).toFixed(1)+'% / '+(underfundedRuns/runs*100).toFixed(1)+'%', bustRuns>0?'var(--loss)':'var(--win)', 'eq ≤ 0 / eq < ladder cost'],
+  ].map(([l,v,c,s]) => `<div class="sim-out-box"><div class="so-label">${l}</div><div class="so-value" style="color:${c}">${v}</div><div class="so-sub">${s}</div></div>`).join('');
+
+  drawSimChart(sampleMatrix, start, runs);
+
+  // analytic EV per sequence from the tier probabilities and per-tier nets
+  let pReach = 1, ev = 0;
+  for (let n = 0; n < maxTiers; n++) { ev += pReach * probs[n] * fixedPlan.tiers[n].winNet; pReach *= (1 - probs[n]); }
+  ev -= pReach * fixedPlan.cumTotal;
+  const haltEvery = pReach > 0 ? Math.round(1/pReach) : Infinity;
+
+  const note = document.getElementById('simNote');
+  note.innerHTML =
+    `Ladder risks: ${fixedPlan.tiers.map(t=>'$'+(+t.risk.toFixed(2)).toLocaleString()).join(' → ')} · ` +
+    `full-ladder cost $${fixedPlan.cumTotal.toFixed(0)} (${(fixedPlan.cumTotal/start*100).toFixed(1)}% of start). ` +
+    `Wins net +$${fixedPlan.baseWin.toFixed(2)} at L1–L${Math.max(1,(deepFrom||maxTiers+1)-1)}; wide-TP recoveries net ≈ $0. ` +
+    `Analytic EV ≈ ${ev>=0?'+':''}$${ev.toFixed(2)}/sequence · expected max-loss ≈ 1 per ${isFinite(haltEvery)?haltEvery.toLocaleString():'∞'} sequences (${(pReach*seqYr).toFixed(2)}/yr). ` +
+    `${sizing==='compound' ? 'Compounding: base risk = '+compPct+'% of equity, so both wins and halt costs scale with the account.' :
+      'Fixed sizing: dollar risk never grows — steady but leaves equity idle as the account grows.'} ` +
+    `Assumes independent sequences: real halts cluster on regime-change days, so treat tail estimates as optimistic.`;
+
+  document.getElementById('simResults').style.display = 'block';
+  document.getElementById('simStatus').textContent = `Done — ${runs} runs × ${totalSeqs.toLocaleString()} sequences`;
+}
+
+function drawSimChart(matrix, start, runs) {
+  const W = 900, H = 200, PAD = 42;
+  const n = matrix[0].length;
+  let yMin = Infinity, yMax = -Infinity;
+  matrix.forEach(p => p.forEach(v => { if (v<yMin) yMin=v; if (v>yMax) yMax=v; }));
+  yMin = Math.min(yMin, start*0.9); yMax = Math.max(yMax, start*1.1);
+  const x = i => PAD + i/(n-1)*(W-PAD-8);
+  const y = v => H-18 - (v-yMin)/(yMax-yMin)*(H-30);
+
+  // median path across ALL runs
+  const med = [];
+  for (let i=0;i<n;i++) {
+    const col = matrix.map(p=>p[i]).sort((a,b)=>a-b);
+    med.push(simPercentile(col, 0.5));
+  }
+
+  const show = Math.min(40, matrix.length);
+  let lines = '';
+  for (let r=0;r<show;r++) {
+    const p = matrix[r];
+    const c = p[p.length-1] >= start ? 'var(--win)' : 'var(--loss)';
+    lines += `<polyline fill="none" stroke="${c}" stroke-width="1" opacity="0.22" points="${p.map((v,i)=>x(i).toFixed(1)+','+y(v).toFixed(1)).join(' ')}"/>`;
+  }
+  const medLine = `<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="${med.map((v,i)=>x(i).toFixed(1)+','+y(v).toFixed(1)).join(' ')}"/>`;
+  const startLine = `<line x1="${PAD}" y1="${y(start)}" x2="${W-8}" y2="${y(start)}" stroke="var(--text-dim)" stroke-width="1" stroke-dasharray="4 4" opacity="0.5"/>`;
+  const labels =
+    `<text x="4" y="${y(yMax)+4}" fill="var(--text-dim)" font-size="10" font-family="Space Mono,monospace">$${Math.round(yMax).toLocaleString()}</text>` +
+    `<text x="4" y="${y(start)+4}" fill="var(--text-dim)" font-size="10" font-family="Space Mono,monospace">$${Math.round(start).toLocaleString()}</text>` +
+    `<text x="4" y="${y(yMin)+4}" fill="var(--text-dim)" font-size="10" font-family="Space Mono,monospace">$${Math.round(yMin).toLocaleString()}</text>`;
+
+  document.getElementById('simChart').innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">${startLine}${lines}${medLine}${labels}</svg>` +
+    `<div style="font-size:9px;color:var(--text-dim);font-family:'Space Mono',monospace;margin-top:4px;">` +
+    `Showing ${show} of ${runs} equity paths · <span style="color:var(--accent);font-weight:700;">bold = median across all runs</span> · dashed = starting balance</div>`;
+}
+
 function renderAnalytics() {
   const trades = getFilteredTrades();
 
@@ -4652,6 +4898,7 @@ async function init() {
   refreshStrategyDropdown();
   buildInstrumentCheckboxes();
   updateRiskCalc();
+  initScenarioSim();
   renderAnalytics();
   renderLogTable('');
 
@@ -4672,6 +4919,7 @@ async function init() {
         // saved checkbox selection back to "all" on every single page load.
         refreshStrategyDropdown();
         buildInstrumentCheckboxes();
+        populateSimSources(true);
         renderAnalytics();
         renderLogTable('');
       }
