@@ -4960,11 +4960,12 @@ document.getElementById('importFile').addEventListener('change', function(e) {
 });
 
 function parseBacktestReport(html) {
-  // Map every position in the file to the instrument section it belongs to
-  const instRe = /Instrument\s*<[^>]*>\s*<TD[^>]*>\s*([A-Z]{3}\/[A-Z]{3})/gi;
+  // Map every position in the file to the instrument section it belongs to.
+  // Generic instrument token: covers FX pairs (EUR/USD), metals (XAU/USD)
+  // and CFDs (USA500.IDX/USD, BRENT.CMD/USD) — anything JForex prints.
   const sections = [];
   let m;
-  const plainRe = /(EUR\/USD|GBP\/USD|USD\/CAD|AUD\/USD|AUD\/CAD)/g;
+  const plainRe = /([A-Z][A-Z0-9.]{1,14}\/[A-Z]{3})/g;
   // robust: find "Instrument" label positions, then nearest pair name after them
   const labelRe = /Instrument/g;
   while ((m = labelRe.exec(html)) !== null) {
