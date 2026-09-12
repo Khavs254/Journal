@@ -5047,7 +5047,9 @@ function parseBacktestReport(html) {
     }
     if (/^(ORB|TCR|[A-Z]{2,5})_/.test(label)) {
       const t = label.match(/_T(\d+)_/);
-      return { tier: t ? parseInt(t[1]) : 1, origin: null, known: true };
+      // Newer strategies embed the setup class directly: TCR_EURUSD_REV_T2_...
+      const setup = label.match(/_(CON|REV)_/);
+      return { tier: t ? parseInt(t[1]) : 1, origin: setup ? setup[1] : null, known: true };
     }
     return { known: false };
   }
