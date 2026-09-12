@@ -2105,6 +2105,44 @@ input::placeholder{color:var(--text-dim);}
 
 <!-- ═══════════════ HISTORY / UNDO-REDO PAGE ═══════════════ -->
 <div class="page" id="page-import">
+
+  <!-- ── Local data management ── -->
+  <div class="card" style="max-width:760px;margin:0 auto 18px;">
+    <h2 style="margin-bottom:4px;">💾 Local Data</h2>
+    <p style="color:var(--text-dim);font-size:13px;margin-bottom:14px;">
+      This journal now stores every trade in your browser's local database on this computer.
+      Nothing is uploaded and no data is sent over the internet. Back up to a file regularly —
+      clearing browser data would erase the local database.
+    </p>
+
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+      <button onclick="exportTradesToFile()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-weight:700;font-size:13px;cursor:pointer;">
+        ⬇️ Export / Save to file
+      </button>
+      <button onclick="document.getElementById('restoreFile').click()" style="background:var(--surface2,#181c24);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-weight:700;font-size:13px;cursor:pointer;">
+        ⬆️ Restore from file
+      </button>
+      <button id="migrateBtn" onclick="migrateFromCloud()" style="background:var(--surface2,#181c24);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-weight:700;font-size:13px;cursor:pointer;">
+        ☁️ Pull from cloud (one-time)
+      </button>
+      <button onclick="wipeLocalData()" style="background:transparent;color:var(--loss);border:1px solid var(--loss);border-radius:8px;padding:10px 16px;font-weight:700;font-size:13px;cursor:pointer;">
+        🗑️ Clear local data
+      </button>
+    </div>
+
+    <input type="file" id="restoreFile" accept=".json,application/json" style="display:none;">
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);margin-bottom:10px;">
+      <input type="checkbox" id="restoreReplace"> Replace all existing trades when restoring (otherwise merge)
+    </label>
+
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.7;border-left:3px solid var(--border);padding-left:12px;">
+      <strong style="color:var(--text);">Export</strong> writes a JSON backup. On Chrome/Edge you pick the file once
+      and the journal keeps re-saving to it automatically after every change.<br>
+      <strong style="color:var(--text);">Pull from cloud</strong> is the only action that touches the network — use it
+      once to bring your existing online trades down, then never again.
+    </div>
+  </div>
+
   <div class="card" style="max-width:760px;margin:0 auto;">
     <h2 style="margin-bottom:4px;">📥 Import Backtest Results</h2>
     <p style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">
@@ -2284,7 +2322,7 @@ input::placeholder{color:var(--text-dim);}
 // ══════════════════════════════════════════════════════
 //  CONFIG — edit these for Supabase live sync
 // ══════════════════════════════════════════════════════
-const USE_SUPABASE    = true;
+const USE_SUPABASE    = false;   // local-only mode: no network sync
 const SUPABASE_URL    = 'https://vvutmugnhecamqcimyvl.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_GfueHt0p--7jyfuK9nAIPw_Glt-kbP1';
 const SUPABASE_TABLE  = 'trades';
@@ -2649,253 +2687,262 @@ async function bulkInsertEmbedded(trades) {
   return await res.json();
 }
 
+// ══════════════════════════════════════════════════════
+//  LOCAL STORAGE LAYER (IndexedDB) — no network egress
+// ══════════════════════════════════════════════════════
+// All trades live in the browser's IndexedDB on this machine. Nothing is
+// sent anywhere. Supabase code below is retained but dormant: it only runs
+// if you explicitly press "Pull from cloud (one-time migration)".
+const IDB_NAME = 'ropa_journal';
+const IDB_STORE = 'trades';
+const IDB_VERSION = 1;
+let _idb = null;
+
+function idbOpen() {
+  if (_idb) return Promise.resolve(_idb);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE, { keyPath: '_id' });
+      }
+    };
+    req.onsuccess = e => { _idb = e.target.result; resolve(_idb); };
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+function idbTx(mode) {
+  return idbOpen().then(db => db.transaction(IDB_STORE, mode).objectStore(IDB_STORE));
+}
+
+function idbGetAll() {
+  return idbTx('readonly').then(store => new Promise((res, rej) => {
+    const r = store.getAll();
+    r.onsuccess = () => res(r.result || []);
+    r.onerror = () => rej(r.error);
+  }));
+}
+
+function idbPut(rec) {
+  return idbTx('readwrite').then(store => new Promise((res, rej) => {
+    const r = store.put(rec);
+    r.onsuccess = () => res(rec);
+    r.onerror = () => rej(r.error);
+  }));
+}
+
+function idbPutMany(recs) {
+  return idbOpen().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    recs.forEach(r => store.put(r));
+    tx.oncomplete = () => res(recs.length);
+    tx.onerror = () => rej(tx.error);
+  }));
+}
+
+function idbDelete(id) {
+  return idbTx('readwrite').then(store => new Promise((res, rej) => {
+    const r = store.delete(id);
+    r.onsuccess = () => res(true);
+    r.onerror = () => rej(r.error);
+  }));
+}
+
+function idbClear() {
+  return idbTx('readwrite').then(store => new Promise((res, rej) => {
+    const r = store.clear();
+    r.onsuccess = () => res(true);
+    r.onerror = () => rej(r.error);
+  }));
+}
+
+function newLocalId() {
+  return 'loc_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
+}
+
+function setLocalBadge(n) {
+  const el = document.getElementById('syncBadge');
+  if (el) el.textContent = `💾 Local (${n} trades)`;
+}
+
+// ---------- Data layer API (same shape the rest of the app expects) ----------
+
 async function loadTrades() {
-  if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-    try {
-      const ok = await checkAndSetupTable();
-      if (!ok) { return [...EMBEDDED_TRADES]; } // table missing, use local until setup
-
-      const data = await fetchAllTrades();
-
-      // One-time migration: push the embedded snapshot up ONLY the very
-      // first time the table is empty. This must never re-trigger just
-      // because the live trade count later drops below the snapshot size
-      // (e.g. after deleting trades) — otherwise deletions get silently
-      // undone by wiping the table and re-seeding the old snapshot.
-      const alreadyMigrated = localStorage.getItem('embeddedSyncDone') === '1';
-      if (data.length === 0 && !alreadyMigrated) {
-        showToast(`⏫ Syncing ${EMBEDDED_TRADES.length} trades to Supabase…`);
-        try {
-          const inserted = await bulkInsertEmbedded(EMBEDDED_TRADES);
-          const result = Array.isArray(inserted) ? inserted : EMBEDDED_TRADES;
-          localStorage.setItem('embeddedSyncDone', '1');
-          document.getElementById('syncBadge').textContent = `🟢 Supabase (${result.length} trades)`;
-          showToast(`✅ ${result.length} trades synced to Supabase`);
-          return result;
-        } catch(e) {
-          showToast('⚠️ Sync failed, using local data — ' + e.message, true);
-          document.getElementById('syncBadge').textContent = `🟡 Supabase partial (0 in DB + ${EMBEDDED_TRADES.length} local)`;
-          return EMBEDDED_TRADES.map((t,i)=>({...t,_id:'emb_'+i}));
-        }
-      }
-      // Any time we see real rows already in the table, consider migration
-      // done — this stops the seed step above from ever firing again, even
-      // if the table is later emptied out on purpose.
-      if (data.length > 0 && !alreadyMigrated) {
-        localStorage.setItem('embeddedSyncDone', '1');
-      }
-
-      document.getElementById('syncBadge').textContent = `🟢 Supabase (${data.length} trades)`;
-      return data;
-    } catch(e) {
-      showToast('⚠️ Supabase load failed — ' + e.message, true);
+  try {
+    let data = await idbGetAll();
+    // First run on a fresh machine: seed the embedded snapshot so the
+    // journal isn't empty. Only ever happens when the local DB has no rows.
+    if (data.length === 0 && localStorage.getItem('localSeedDone') !== '1') {
+      const seeded = EMBEDDED_TRADES.map(t => ({ ...t, _id: newLocalId() }));
+      if (seeded.length) await idbPutMany(seeded);
+      localStorage.setItem('localSeedDone', '1');
+      data = seeded;
+      showToast(`💾 Started local journal with ${seeded.length} trades`);
     }
+    data.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    setLocalBadge(data.length);
+    return data;
+  } catch (e) {
+    showToast('⚠️ Local database error — ' + e.message, true);
+    return [...EMBEDDED_TRADES];
   }
-  document.getElementById('syncBadge').textContent = '📦 Local snapshot';
-  return [...EMBEDDED_TRADES];
 }
 
 async function saveTrade(trade) {
-  if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-    // Strip internal fields before sending to Supabase — _id isn't a real column
-    const { _id, created_at, ...payload } = trade;
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}`, {
-      method: 'POST',
-      headers: { ...SB_HEADERS, Prefer: 'return=representation' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) { const err = await res.text(); throw new Error(`Save failed (${res.status}): ${err.slice(0,200)}`); }
-    const data = await res.json();
-    if (!Array.isArray(data) || !data[0]) { throw new Error('Unexpected save response'); }
-    // bump badge count
-    const badge = document.getElementById('syncBadge');
-    const m = badge.textContent.match(/\((\d+) trades\)/);
-    if (m) badge.textContent = `🟢 Supabase (${+m[1]+1} trades)`;
-    return data[0];
-  }
-  trade._id = 'local_' + Date.now();
-  return trade;
+  const rec = { ...trade, _id: newLocalId(), created_at: new Date().toISOString() };
+  await idbPut(rec);
+  autosaveToFile();
+  return rec;
+}
+
+async function saveTradesBulk(trades) {
+  const recs = trades.map(t => ({ ...t, _id: newLocalId(), created_at: new Date().toISOString() }));
+  await idbPutMany(recs);
+  autosaveToFile();
+  return recs;
 }
 
 async function updateTrade(id, trade) {
-  if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL' && !String(id).startsWith('local_') && !String(id).startsWith('emb_')) {
-    // Strip internal fields before sending to Supabase — _id and id aren't updatable columns
-    const { _id, id: _id2, created_at, ...payload } = trade;
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?id=eq.${id}`, {
-      method: 'PATCH',
-      headers: { ...SB_HEADERS, Prefer: 'return=representation' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) { const err = await res.text(); throw new Error(`Update failed (${res.status}): ${err.slice(0,200)}`); }
-    const data = await res.json();
-    return Array.isArray(data) && data[0] ? data[0] : trade;
-  }
-  return trade;
+  const rec = { ...trade, _id: id };
+  await idbPut(rec);
+  autosaveToFile();
+  return rec;
 }
 
 async function deleteTrade(id) {
-  if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL' && !String(id).startsWith('local_') && !String(id).startsWith('emb_')) {
-    await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?id=eq.${id}`, {
-      method: 'DELETE',
-      headers: SB_HEADERS
-    });
-    const badge = document.getElementById('syncBadge');
-    const m = badge.textContent.match(/\((\d+) trades\)/);
-    if (m && +m[1] > 0) badge.textContent = `🟢 Supabase (${+m[1]-1} trades)`;
-  }
-  allTrades = allTrades.filter(t => t._id !== id && t.id !== id);
-  sessionTrades = sessionTrades.filter(t => t._id !== id && t.id !== id);
+  await idbDelete(id);
+  autosaveToFile();
+  return true;
 }
+
+// Dormant network functions — kept as no-ops so nothing else breaks.
+function subscribeRealtime() { /* disabled: local-only mode */ }
+async function refreshTradesFromServer() { allTrades = await loadTrades(); refreshAfterRemoteChange(); }
+function updateSyncBadgeRealtime() { /* disabled: local-only mode */ }
+function updateSyncBadgeCount() { setLocalBadge((allTrades || []).length); }
 
 // ══════════════════════════════════════════════════════
-//  REALTIME SYNC (cross-device/cross-tab live updates)
+//  FILE BACKUP / RESTORE
 // ══════════════════════════════════════════════════════
-let realtimeChannel = null;
-let _sbClient = null; // singleton — never call createClient() more than once
+let _fileHandle = null;   // File System Access API handle, if granted
 
-function getSupabaseClient() {
-  if (_sbClient) return _sbClient;
-  if (typeof window.supabase === 'undefined' || !window.supabase.createClient) return null;
-  _sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  return _sbClient;
+async function exportTradesToFile() {
+  const data = await idbGetAll();
+  const payload = JSON.stringify({
+    format: 'ropa-journal-v1',
+    exported: new Date().toISOString(),
+    count: data.length,
+    trades: data
+  }, null, 2);
+
+  // Preferred: write straight to a file the user picks (Chrome/Edge).
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: `trading-journal-${new Date().toISOString().slice(0,10)}.json`,
+        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
+      });
+      const w = await handle.createWritable();
+      await w.write(payload);
+      await w.close();
+      _fileHandle = handle;
+      showToast(`✅ Saved ${data.length} trades to file`);
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;   // user cancelled — not an error
+    }
+  }
+  // Fallback: ordinary download (Firefox/Safari).
+  const blob = new Blob([payload], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `trading-journal-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`✅ Downloaded ${data.length} trades`);
 }
 
-function updateSyncBadgeCount() {
-  const badge = document.getElementById('syncBadge');
-  if (badge && badge.textContent.includes('Supabase')) {
-    badge.textContent = `🟢 Supabase (${allTrades.length} trades)`;
+// Silent re-write to the same file after every change, if a handle exists.
+async function autosaveToFile() {
+  if (!_fileHandle) return;
+  try {
+    const data = await idbGetAll();
+    const w = await _fileHandle.createWritable();
+    await w.write(JSON.stringify({
+      format: 'ropa-journal-v1',
+      exported: new Date().toISOString(),
+      count: data.length,
+      trades: data
+    }, null, 2));
+    await w.close();
+  } catch (e) {
+    _fileHandle = null;   // permission lost / file moved — stop trying silently
   }
 }
 
-function updateSyncBadgeRealtime(connected) {
-  const badge = document.getElementById('syncBadge');
-  if (!badge) return;
-  const n = allTrades.length;
-  if (connected) {
-    badge.textContent = `🟢 Supabase (${n} trades)`;
-    badge.style.color = '';
-    badge.style.borderColor = '';
-  } else {
-    badge.textContent = `🟡 Supabase (${n} trades · polling)`;
-    badge.style.color = 'var(--warn)';
-    badge.style.borderColor = 'var(--warn)';
+async function importTradesFromFile(file, mode) {
+  const text = await file.text();
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch (e) { showToast('⚠️ Not a valid JSON backup file', true); return; }
+
+  const rows = Array.isArray(parsed) ? parsed
+             : Array.isArray(parsed.trades) ? parsed.trades : null;
+  if (!rows) { showToast('⚠️ No trades found in that file', true); return; }
+
+  if (mode === 'replace') {
+    if (!confirm(`Replace ALL local trades with the ${rows.length} in this file? This cannot be undone.`)) return;
+    await idbClear();
   }
+  const recs = rows.map(t => {
+    const { id, ...rest } = t;
+    return { ...rest, _id: t._id || newLocalId() };
+  });
+  await idbPutMany(recs);
+  localStorage.setItem('localSeedDone', '1');
+  allTrades = await loadTrades();
+  refreshAfterRemoteChange();
+  showToast(`✅ ${mode === 'replace' ? 'Restored' : 'Merged'} ${recs.length} trades`);
 }
 
-function refreshAfterRemoteChange() {
-  refreshStrategyDropdown();
-  buildInstrumentCheckboxes();
-  renderLogTable(document.querySelector('.log-search')?.value || '');
-  const analyticsPage = document.getElementById('page-analytics');
-  if (analyticsPage && analyticsPage.classList.contains('active')) renderAnalytics();
-  const strategiesPage = document.getElementById('page-strategies');
-  if (strategiesPage && strategiesPage.classList.contains('active')) renderStrategies();
-  updateSyncBadgeCount();
-}
-
-async function refreshTradesFromServer() {
-  if (!USE_SUPABASE || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
+// One-time migration: pull everything down from Supabase into local storage.
+// This is the ONLY function in local mode that touches the network, and it
+// only runs when the button is pressed.
+async function migrateFromCloud() {
+  if (!confirm('Download all trades from the cloud database into local storage? Existing local trades are kept (duplicates possible if you run this twice).')) return;
+  const btn = document.getElementById('migrateBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Downloading…'; }
   try {
     const data = await fetchAllTrades();
-    data.forEach(t => { if (!t._id) t._id = t.id; });
-    allTrades = data;
-    refreshAfterRemoteChange();
-  } catch(e) {
-    // Silent — this is just a background safety-net refresh, not a user action.
-  }
-}
-
-document.addEventListener('visibilitychange', () => {
-  // Mobile browsers suspend the realtime websocket while the screen is off
-  // or the tab is backgrounded. Re-sync as soon as the device/tab is active
-  // again, so nothing is missed even if a realtime event slipped through.
-  if (document.visibilityState === 'visible') {
-    refreshTradesFromServer();
-    // Also attempt to reconnect realtime if the channel was dropped while backgrounded
-    if (USE_SUPABASE && SUPABASE_URL !== 'YOUR_SUPABASE_URL' && realtimeChannel) {
-      const state = realtimeChannel.state;
-      if (state === 'closed' || state === 'errored' || state === 'leaving') {
-        console.log('Realtime channel was dropped while backgrounded — reconnecting…');
-        try { realtimeChannel.unsubscribe(); } catch(e) {}
-        realtimeChannel = null;
-        subscribeRealtime();
-      }
-    }
-  }
-});
-
-function subscribeRealtime() {
-  if (!USE_SUPABASE || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
-  const client = getSupabaseClient();
-  if (!client) {
-    console.warn('Supabase JS client failed to load — live sync disabled, saving/loading still works.');
-    // Start polling as the only option
-    if (!window._pollFallback) {
-      window._pollFallback = setInterval(refreshTradesFromServer, 15000);
-    }
-    return;
-  }
-  if (realtimeChannel) return; // already subscribed
-
-  // Remove any old channel on the singleton client before creating a new one
-  try { client.removeAllChannels(); } catch(e) {}
-
-  realtimeChannel = client
-    .channel('trades-live-sync')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: SUPABASE_TABLE }, (payload) => {
-      const row = payload.new;
-      if (!row || !row.id) return;
-      if (allTrades.some(t => t.id === row.id || t._id === row.id)) return;
-      row._id = row.id;
-      allTrades.unshift(row);
-      refreshAfterRemoteChange();
-      showToast('🔄 New trade synced from another device');
-    })
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: SUPABASE_TABLE }, (payload) => {
-      const row = payload.new;
-      if (!row || !row.id) return;
-      const idx = allTrades.findIndex(t => t.id === row.id || t._id === row.id);
-      row._id = row.id;
-      if (idx === -1) { allTrades.unshift(row); } else { allTrades[idx] = row; }
-      refreshAfterRemoteChange();
-    })
-    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: SUPABASE_TABLE }, (payload) => {
-      const oldRow = payload.old;
-      if (!oldRow || !oldRow.id) return;
-      allTrades = allTrades.filter(t => t.id !== oldRow.id && t._id !== oldRow.id);
-      sessionTrades = sessionTrades.filter(t => t.id !== oldRow.id && t._id !== oldRow.id);
-      refreshAfterRemoteChange();
-    })
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log('✅ Realtime sync connected.');
-        updateSyncBadgeRealtime(true);
-        // Cancel polling fallback — realtime is handling updates
-        if (window._pollFallback) { clearInterval(window._pollFallback); window._pollFallback = null; }
-        // Cancel any pending reconnect timer
-        if (window._realtimeReconnectTimer) { clearTimeout(window._realtimeReconnectTimer); window._realtimeReconnectTimer = null; }
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        console.warn('⚠️ Realtime unavailable (' + status + ') — polling every 15s instead.');
-        updateSyncBadgeRealtime(false);
-        realtimeChannel = null; // allow re-subscribe next attempt
-        // Start polling fallback
-        if (!window._pollFallback) {
-          window._pollFallback = setInterval(refreshTradesFromServer, 15000);
-        }
-        // Schedule ONE reconnect attempt — exponential-style, won't loop endlessly
-        if (!window._realtimeReconnectTimer) {
-          window._realtimeReconnectTimer = setTimeout(() => {
-            window._realtimeReconnectTimer = null;
-            subscribeRealtime(); // realtimeChannel is null so this will proceed
-          }, 30000); // wait 30s before retrying (not 10s — avoids hammering)
-        }
-      }
+    const recs = data.map(t => {
+      const { id, ...rest } = t;
+      return { ...rest, _id: newLocalId() };
     });
+    await idbPutMany(recs);
+    localStorage.setItem('localSeedDone', '1');
+    allTrades = await loadTrades();
+    refreshAfterRemoteChange();
+    showToast(`✅ Pulled ${recs.length} trades into local storage`);
+  } catch (e) {
+    showToast('⚠️ Cloud download failed — ' + e.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '☁️ Pull from cloud (one-time)'; }
+  }
 }
 
-// ══════════════════════════════════════════════════════
-//  OUTCOME LOGIC
-// ══════════════════════════════════════════════════════
+async function wipeLocalData() {
+  const data = await idbGetAll();
+  if (!confirm(`Delete all ${data.length} locally stored trades? Export a backup first if you need one. This cannot be undone.`)) return;
+  await idbClear();
+  localStorage.setItem('localSeedDone', '1');   // don't re-seed the snapshot
+  allTrades = await loadTrades();
+  refreshAfterRemoteChange();
+  showToast('🗑️ Local journal cleared');
+}
+
 function deriveOutcome(t) {
   if (t.l1_wl==='W') return 'Clean win';
   if (t.l2_wl==='W') return 'L2 recovered';
@@ -4844,15 +4891,14 @@ function saveNewStrategy() {
 async function handleDeleteStrategy(name) {
   const count = allTrades.filter(t => (t.system||'') === name).length;
   const msg = count > 0
-    ? `Delete strategy "${name}" AND its ${count} trades from the database?\n\nThis permanently removes the trades from Supabase. OK = delete strategy + trades. Cancel = abort.`
+    ? `Delete strategy "${name}" AND its ${count} trades from the database?\n\nThis permanently removes the trades from local storage. OK = delete strategy + trades. Cancel = abort.`
     : `Delete strategy "${name}"? (it has no trades)`;
   if (!confirm(msg)) return;
   if (count > 0) {
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?system=eq.${encodeURIComponent(name)}`, {
-        method: 'DELETE', headers: SB_HEADERS
-      });
-      if (!res.ok) { alert('Failed to delete trades: ' + res.status + ' ' + (await res.text()).slice(0,150)); return; }
+      const victims = allTrades.filter(t => (t.system||'') === name);
+      for (const v of victims) { if (v._id) await idbDelete(v._id); }
+      autosaveToFile();
     } catch (e) { alert('Delete error: ' + e.message); return; }
     allTrades = allTrades.filter(t => (t.system||'') !== name);
   }
@@ -4946,6 +4992,14 @@ const IMPORT_INSTRUMENT_MAP = {
   'XAU/USD':'xauusd', 'USA500.IDX/USD':'usa500', 'BRENT.CMD/USD':'brent'
 };
 
+document.getElementById('restoreFile').addEventListener('change', function(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  const mode = document.getElementById('restoreReplace').checked ? 'replace' : 'merge';
+  importTradesFromFile(f, mode);
+  e.target.value = '';
+});
+
 document.getElementById('importFile').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -4979,28 +5033,55 @@ function parseBacktestReport(html) {
     return cur || 'EUR/USD';
   };
 
-  // Parse all tier-order rows with their file positions
+  // ---- Label schemes understood by the importer -------------------------
+  //  RopaWave : T1_CON_xxxx  / T3_REV_xxxx        (tier + setup in label)
+  //  ORB      : ORB_EURUSD_B20696  (tier 1)       / ORB_EURUSD_T2_20668
+  //  TCR      : TCR_EURUSD_1073052000000 (tier 1) / TCR_EURUSD_T2_5874523929900
+  //  Generic  : anything with _T<n>_ is tier n; anything else is tier 1.
+  // Recovery tiers in the newer strategies carry their own unique id (nanoTime)
+  // that does NOT link back to their tier 1, so sequences are rebuilt from the
+  // chronological order per instrument instead of from the label.
+  function classify(label) {
+    if (/^T\d+_(CON|REV)_/.test(label)) {
+      return { tier: parseInt(label.match(/^T(\d+)_/)[1]), origin: label.split('_')[1], known: true };
+    }
+    if (/^(ORB|TCR|[A-Z]{2,5})_/.test(label)) {
+      const t = label.match(/_T(\d+)_/);
+      return { tier: t ? parseInt(t[1]) : 1, origin: null, known: true };
+    }
+    return { known: false };
+  }
+
   const rowRe = /<TR>\s*([\s\S]*?)<\/TR>/g;
   const orders = [];
   while ((m = rowRe.exec(html)) !== null) {
     const cells = [...m[1].matchAll(/<TD>([\s\S]*?)<\/TD>/g)].map(c => c[1].trim());
-    if (cells.length >= 9 && /^T\d+_(CON|REV)_/.test(cells[0])) {
-      orders.push({
-        tier: parseInt(cells[0].match(/^T(\d+)_/)[1]),
-        origin: cells[0].split('_')[1],
-        dir: cells[2],
-        plpips: parseFloat(cells[6]),
-        open: cells[7],
-        close: cells[8],
-        inst: instAt(m.index)
-      });
-    }
+    if (cells.length < 9) continue;
+    const info = classify(cells[0]);
+    if (!info.known) continue;
+    const pl = parseFloat(cells[6]);
+    if (isNaN(pl)) continue;
+    orders.push({
+      label: cells[0],
+      tier: info.tier,
+      origin: info.origin,          // 'CON' / 'REV' for RopaWave, else null
+      dir: cells[2],
+      plpips: pl,
+      open: cells[7],
+      close: cells[8],
+      inst: instAt(m.index)
+    });
   }
 
   if (!orders.length) {
-    alert('No tier orders (T1_CON_/T1_REV_ labels) found in this file. Is it a JForex report from RopaWave?');
+    alert('No recognisable order labels found in this file.\n\n'
+      + 'The importer understands RopaWave (T1_CON_/T1_REV_), ORB (ORB_...) and '
+      + 'ThreeCandleReversal (TCR_...) reports. Is this a JForex Historical Tester HTML report?');
     return;
   }
+
+  // Does this report carry CON/REV setup information at all?
+  const hasSetupSplit = orders.some(o => o.origin === 'CON' || o.origin === 'REV');
 
   // Group per instrument, chronologically, into sequences
   const byInst = {};
@@ -5021,25 +5102,28 @@ function parseBacktestReport(html) {
     if (cur.length) sequences.push({ inst, orders: cur });
   });
 
-  const conCount = sequences.filter(s => s.orders[0].origin === 'CON').length;
-  const revCount = sequences.length - conCount;
+  const conCount = hasSetupSplit ? sequences.filter(s => s.orders[0].origin === 'CON').length : 0;
+  const revCount = hasSetupSplit ? sequences.length - conCount : 0;
 
   // OPTION (a): read the strategy's own name from the report (log prefix [RopaWaveVNN] or class name)
   let detectedName = null;
   let nm = html.match(/\[(RopaWave[A-Za-z0-9]+)\]/);
   if (nm) detectedName = nm[1];
-  if (!detectedName) { nm = html.match(/class\s+(RopaWave[A-Za-z0-9]+)/); if (nm) detectedName = nm[1]; }
+  if (!detectedName) { nm = html.match(/class\s+([A-Za-z][A-Za-z0-9_]{3,40})\s+implements\s+IStrategy/); if (nm) detectedName = nm[1]; }
+  if (!detectedName) { nm = html.match(/Strategy\s*[:<][^<]*?>\s*([A-Za-z][A-Za-z0-9_]{3,40})/); if (nm) detectedName = nm[1]; }
   if (detectedName) document.getElementById('importBaseName').value = detectedName;
 
-  _importParsed = { sequences, maxTierSeen, detectedName };
+  _importParsed = { sequences, maxTierSeen, detectedName, hasSetupSplit };
 
   const pv = document.getElementById('importPreview');
   pv.style.display = 'block';
   pv.innerHTML = `<strong>Parsed successfully</strong><br>
-    ${detectedName ? 'Detected strategy: <strong>'+detectedName+'</strong><br>' : '<span style="color:var(--warn)">No RopaWaveVNN name found in report — using the base name field</span><br>'}
+    ${detectedName ? 'Detected strategy: <strong>'+detectedName+'</strong><br>' : '<span style="color:var(--warn)">No strategy name found in report — using the base name field</span><br>'}
     ${orders.length} tier orders &rarr; <strong>${sequences.length} sequences</strong><br>
-    Will create: <strong>${(detectedName||'?')+' Continuation'}</strong> &amp; <strong>${(detectedName||'?')+' Reversal'}</strong><br>
-    Continuation: <strong>${conCount}</strong> &nbsp;|&nbsp; Reversal: <strong>${revCount}</strong><br>
+    ${hasSetupSplit
+      ? `Will create: <strong>${(detectedName||'?')+' Continuation'}</strong> &amp; <strong>${(detectedName||'?')+' Reversal'}</strong><br>
+         Continuation: <strong>${conCount}</strong> &nbsp;|&nbsp; Reversal: <strong>${revCount}</strong><br>`
+      : `Will create: <strong>${detectedName||'(base name)'}</strong> <span style="color:var(--text-dim)">(no CON/REV split in this report)</span><br>`}
     Instruments: ${Object.keys(byInst).join(', ')}<br>
     Date range: ${orders[0].open.slice(0,10)} &rarr; ${orders[orders.length-1].close.slice(0,10)}<br>
     Deepest tier reached: T${maxTierSeen}`;
@@ -5061,8 +5145,11 @@ async function runBacktestImport() {
   const base = (_importParsed.detectedName || document.getElementById('importBaseName').value.trim());
   if (!base) { alert('No strategy name detected and none entered.'); return; }
 
-  const contName = base + ' Continuation';
-  const revName  = base + ' Reversal';
+  // Reports without CON/REV setup labels (ORB, TCR, any generic strategy)
+  // file under ONE strategy name rather than a Continuation/Reversal pair.
+  const split = !!_importParsed.hasSetupSplit;
+  const contName = split ? base + ' Continuation' : base;
+  const revName  = split ? base + ' Reversal'     : base;
 
   // OPTION (a): never duplicate into an existing version. If this exact version's
   // strategies already hold trades, block the import entirely (re-run under a new
@@ -5079,11 +5166,15 @@ async function runBacktestImport() {
   btn.disabled = true;
   document.getElementById('importLog').innerHTML = '';
 
-  // 1. register the two strategies (skip if already registered)
-  [['Continuation', contName], ['Reversal', revName]].forEach(([type, name]) => {
+  // 1. register the strategies (one, or a Continuation/Reversal pair)
+  const toRegister = split
+    ? [['Continuation', contName], ['Reversal', revName]]
+    : [['Continuation', contName]];
+  toRegister.forEach(([type, name]) => {
     if (!getAllStrategies().find(s => s.name === name)) {
       customStrategies.push({ name, type, desc: 'Imported from ' + base + ' backtest',
-        icon: type === 'Continuation' ? '➡️' : '🔄', cls: type === 'Continuation' ? 'cont' : 'rev' });
+        icon: split ? (type === 'Continuation' ? '➡️' : '🔄') : '📈',
+        cls: type === 'Continuation' ? 'cont' : 'rev' });
       importLog('Registered strategy: ' + name, 'var(--win)');
     } else {
       importLog('Strategy already registered: ' + name);
@@ -5098,11 +5189,11 @@ async function runBacktestImport() {
     const row = {
       date: first.open.slice(0,10),
       instrument: IMPORT_INSTRUMENT_MAP[seq.inst] || seq.inst.toLowerCase().replace('/',''),
-      system: first.origin === 'CON' ? contName : revName,
+      system: split ? (first.origin === 'CON' ? contName : revName) : contName,
       l1_wl:null,l1_pips:null,l2_wl:null,l2_pips:null,l3_wl:null,l3_pips:null,
       l4_wl:null,l4_pips:null,l5_wl:null,l5_pips:null,l6_wl:null,l6_pips:null,l7_wl:null,l7_pips:null,
       net_pips: Math.round(seq.orders.reduce((s,o)=>s+o.plpips,0)*10)/10,
-      notes: first.origin + ' | ' + first.dir + ' | ' + first.open + ' -> ' + seq.orders[seq.orders.length-1].close
+      notes: (first.origin ? first.origin + ' | ' : '') + first.dir + ' | ' + first.open + ' -> ' + seq.orders[seq.orders.length-1].close
     };
     let deepNote = '';
     seq.orders.forEach(o => {
@@ -5121,28 +5212,23 @@ async function runBacktestImport() {
     return row;
   });
 
-  // 3. batch insert to Supabase
-  importLog('Inserting ' + rows.length + ' rows…');
-  const BATCH = 200;
+  // 3. write to LOCAL storage (IndexedDB) — no network
+  importLog('Saving ' + rows.length + ' rows to local storage…');
   let done = 0, failed = 0;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const chunk = rows.slice(i, i + BATCH);
-    try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}`, {
-        method: 'POST',
-        headers: { ...SB_HEADERS, Prefer: 'return=minimal' },
-        body: JSON.stringify(chunk)
-      });
-      if (!res.ok) { failed += chunk.length; importLog('Batch failed ('+res.status+'): '+(await res.text()).slice(0,150), 'var(--loss)'); }
-      else { done += chunk.length; importLog('Inserted ' + done + '/' + rows.length, 'var(--win)'); }
-    } catch (err) { failed += chunk.length; importLog('Batch error: ' + err.message, 'var(--loss)'); }
+  try {
+    const saved = await saveTradesBulk(rows);
+    done = saved.length;
+    importLog('Saved ' + done + '/' + rows.length + ' locally', 'var(--win)');
+  } catch (err) {
+    failed = rows.length;
+    importLog('Local save failed: ' + err.message, 'var(--loss)');
   }
 
   importLog('Done. ' + done + ' imported, ' + failed + ' failed.', failed ? 'var(--warn)' : 'var(--win)');
   if (done > 0) {
     importLog('Reloading journal data…');
-    await loadTrades();
-    renderStrategies();
+    allTrades = await loadTrades();
+    refreshAfterRemoteChange();
     importLog('Journal refreshed — check the Strategies tab.', 'var(--win)');
   }
   btn.disabled = false;
