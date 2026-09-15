@@ -5045,7 +5045,8 @@ function parseBacktestReport(html) {
     if (/^T\d+_(CON|REV)_/.test(label)) {
       return { tier: parseInt(label.match(/^T(\d+)_/)[1]), origin: label.split('_')[1], known: true };
     }
-    if (/^(ORB|TCR|[A-Z]{2,5})_/.test(label)) {
+    // Allow a version suffix on the prefix: TCR_, TCR3_, ORB19_, etc.
+    if (/^[A-Z]{2,6}[0-9]{0,3}_/.test(label)) {
       const t = label.match(/_T(\d+)_/);
       // Newer strategies embed the setup class directly: TCR_EURUSD_REV_T2_...
       const setup = label.match(/_(CON|REV)_/);
