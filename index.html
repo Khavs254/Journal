@@ -4988,8 +4988,10 @@ let _importParsed = null;
 
 const IMPORT_INSTRUMENT_MAP = {
   'EUR/USD':'eurusd', 'GBP/USD':'gbpusd', 'USD/CAD':'usdcad',
-  'AUD/USD':'audusd', 'AUD/CAD':'audcad',
-  'XAU/USD':'xauusd', 'USA500.IDX/USD':'usa500', 'BRENT.CMD/USD':'brent'
+  'AUD/USD':'audusd', 'AUD/CAD':'audcad', 'NZD/USD':'nzdusd',
+  'USD/JPY':'usdjpy', 'EUR/JPY':'eurjpy', 'GBP/JPY':'gbpjpy', 'USD/CHF':'usdchf',
+  'XAU/USD':'xauusd', 'XAG/USD':'xagusd',
+  'USA500.IDX/USD':'usa500', 'BRENT.CMD/USD':'brent', 'XTI/USD':'xtiusd'
 };
 
 document.getElementById('restoreFile').addEventListener('change', function(e) {
@@ -5047,7 +5049,8 @@ function parseBacktestReport(html) {
     }
     // Allow a version suffix on the prefix: TCR_, TCR3_, ORB19_, etc.
     if (/^[A-Z]{2,6}[0-9]{0,3}_/.test(label)) {
-      const t = label.match(/_T(\d+)_/);
+      // Tier marker: RopaWave/ORB/TCR use _T<n>_, WmaBreakoutLadder uses _L<n>_
+      const t = label.match(/_[TL](\d+)_/);
       // Newer strategies embed the setup class directly: TCR_EURUSD_REV_T2_...
       const setup = label.match(/_(CON|REV)_/);
       return { tier: t ? parseInt(t[1]) : 1, origin: setup ? setup[1] : null, known: true };
@@ -5231,6 +5234,10 @@ async function runBacktestImport() {
   if (done > 0) {
     importLog('Reloading journal data…');
     allTrades = await loadTrades();
+    // The instrument filter is built from the data, so it must be rebuilt or
+    // newly imported instruments never appear as checkboxes.
+    instrumentsRestoredFromStorage = false;
+    buildInstrumentCheckboxes();
     refreshAfterRemoteChange();
     importLog('Journal refreshed — check the Strategies tab.', 'var(--win)');
   }
